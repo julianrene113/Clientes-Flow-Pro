@@ -428,6 +428,7 @@ const S = {
   citas: [],
   empleados: [],
   invLog: [],
+  devoluciones: [],
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -696,7 +697,7 @@ async function doLogout(){
   stopListeners();
   try{ await auth.signOut(); }catch(e){}
   S.uid=null; S.user=null; S.role='admin'; S.empData=null;
-  S.clientes=[]; S.catalogo=[]; S.ventas=[]; S.pagos=[]; S.citas=[]; S.empleados=[]; S.invLog=[];
+  S.clientes=[]; S.catalogo=[]; S.ventas=[]; S.pagos=[]; S.citas=[]; S.empleados=[]; S.invLog=[]; S.devoluciones=[];
   document.getElementById('app').classList.add('hidden');
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('admin-pass').value='';
@@ -893,9 +894,10 @@ document.getElementById('reg-pass2').addEventListener('keydown',e=>{ if(e.key===
 // ── DASHBOARD ──────────────────────────────────────────────
 function renderDashboard(){
   const c = document.getElementById('content');
+  const isOwnerView = S.role==='admin';
   c.innerHTML = `
   <div class="stat-grid" id="dash-stats">
-    <div class="stat-card"><div class="sc-label">Ingresos del mes</div><div class="sc-value text-accent" id="ds-ingresos">…</div><div class="sc-sub" id="ds-ingresos-sub"></div></div>
+    <div class="stat-card"><div class="sc-label">${isOwnerView?'Ingresos del mes':'Mis ventas del mes'}</div><div class="sc-value text-accent" id="ds-ingresos">…</div><div class="sc-sub" id="ds-ingresos-sub"></div></div>
     <div class="stat-card"><div class="sc-label">Clientes activos</div><div class="sc-value" id="ds-clientes">…</div><div class="sc-sub">total registrados</div></div>
     <div class="stat-card"><div class="sc-label">Citas hoy</div><div class="sc-value" id="ds-citas">…</div><div class="sc-sub" id="ds-citas-sub"></div></div>
     <div class="stat-card"><div class="sc-label">Cobros pendientes</div><div class="sc-value text-red" id="ds-deuda">…</div><div class="sc-sub" id="ds-deuda-sub"></div></div>
@@ -904,11 +906,11 @@ function renderDashboard(){
   <div style="display:grid;grid-template-columns:1fr 340px;gap:18px" id="dash-grid">
     <div style="display:flex;flex-direction:column;gap:16px">
       <div class="card">
-        <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:14px">📊 Ingresos por mes (últimos 6)</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:14px">📊 ${isOwnerView?'Ingresos por mes (últimos 6)':'Mis ventas por mes (últimos 6)'}</div>
         <canvas id="chart-ingresos" height="160"></canvas>
       </div>
       <div class="card">
-        <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:12px">🗂 Resumen financiero del mes</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:12px">🗂 ${isOwnerView?'Resumen financiero del mes':'Resumen de mis ventas'}</div>
         <div id="dash-resumen"></div>
       </div>
     </div>
@@ -952,12 +954,15 @@ function updateDash(){
   const today = new Date(); today.setHours(0,0,0,0);
   const tomorrow = new Date(today); tomorrow.setDate(today.getDate()+1);
   const startMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  const isOwnerView = S.role==='admin';
+  const myId = S.role==='admin' ? S.user?.uid : S.empData?.id;
 
   // ── Stats ──
-  const monthV = S.ventas.filter(v=>{ const d=toDate(v.fecha); return d&&d>=startMonth; });
+  const ventasBase = isOwnerView ? S.ventas : S.ventas.filter(v=>v.empleadoId===myId);
+  const monthV = ventasBase.filter(v=>{ const d=toDate(v.fecha); return d&&d>=startMonth; });
   const ingServ = monthV.filter(v=>v.tipo==='servicio').reduce((a,v)=>a+(v.total||0),0);
   const ingProd = monthV.filter(v=>v.tipo!=='servicio').reduce((a,v)=>a+(v.total||0),0);
-  const ingPagos = S.pagos.filter(p=>{ const d=toDate(p.fecha); return d&&d>=startMonth&&p.estado==='cobrado'; }).reduce((a,p)=>a+(p.monto||0),0);
+  const ingPagos = isOwnerView ? S.pagos.filter(p=>{ const d=toDate(p.fecha); return d&&d>=startMonth&&p.estado==='cobrado'; }).reduce((a,p)=>a+(p.monto||0),0) : 0;
   const total = ingServ + ingProd + ingPagos;
 
   const el = id=>document.getElementById(id);
@@ -970,8 +975,8 @@ function updateDash(){
   if(el('ds-citas-sub')) el('ds-citas-sub').textContent = citasHoy.filter(c=>c.estado==='pendiente'||!c.estado).length + ' pendientes';
 
   const deudaTotal = S.clientes.reduce((a,cl)=>a+Math.max(0,cl.deuda||0),0);
-  if(el('ds-deuda')) el('ds-deuda').textContent = fmt(deudaTotal);
-  if(el('ds-deuda-sub')) el('ds-deuda-sub').textContent = S.clientes.filter(cl=>(cl.deuda||0)>0).length + ' clientes con deuda';
+  if(el('ds-deuda')) el('ds-deuda').textContent = isOwnerView ? fmt(deudaTotal) : '—';
+  if(el('ds-deuda-sub')) el('ds-deuda-sub').textContent = isOwnerView ? (S.clientes.filter(cl=>(cl.deuda||0)>0).length + ' clientes con deuda') : 'Visible solo para el administrador';
 
   // ── Chart ──
   const ctx = el('chart-ingresos');
@@ -982,8 +987,8 @@ function updateDash(){
       months.push(d.toLocaleDateString('es-CO',{month:'short'}));
       const s = new Date(d.getFullYear(), d.getMonth(), 1);
       const e = new Date(d.getFullYear(), d.getMonth()+1, 1);
-      const t = S.ventas.filter(v=>{const dd=toDate(v.fecha);return dd&&dd>=s&&dd<e;}).reduce((a,v)=>a+(v.total||0),0)
-              + S.pagos.filter(p=>{const dd=toDate(p.fecha);return dd&&dd>=s&&dd<e&&p.estado==='cobrado';}).reduce((a,p)=>a+(p.monto||0),0);
+      const t = ventasBase.filter(v=>{const dd=toDate(v.fecha);return dd&&dd>=s&&dd<e;}).reduce((a,v)=>a+(v.total||0),0)
+              + (isOwnerView ? S.pagos.filter(p=>{const dd=toDate(p.fecha);return dd&&dd>=s&&dd<e&&p.estado==='cobrado';}).reduce((a,p)=>a+(p.monto||0),0) : 0);
       vals.push(t);
     }
     if(dashChart) dashChart.destroy();
@@ -999,16 +1004,16 @@ function updateDash(){
 
   // ── Resumen financiero ──
   const res = el('dash-resumen');
-  if(res) res.innerHTML = [
-    ['💇 Servicios', ingServ],
-    ['📦 Productos', ingProd],
-    ['💳 Cobros manuales', ingPagos],
-    ['💰 Total', total]
-  ].map(([lbl,val],i)=>`
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;${i<3?'border-bottom:1px solid var(--border)':''}">
-      <span style="font-size:13px;color:var(--text2)">${lbl}</span>
-      <span style="font-family:Syne,sans-serif;font-weight:700;font-size:${i===3?'16':'14'}px;${i===3?'color:var(--accent)':''}">${fmt(val)}</span>
-    </div>`).join('');
+  if(res){
+    const rows = isOwnerView
+      ? [['💇 Servicios', ingServ],['📦 Productos', ingProd],['💳 Cobros manuales', ingPagos],['💰 Total', total]]
+      : [['💇 Servicios', ingServ],['📦 Productos', ingProd],['💰 Total vendido por mí', total]];
+    res.innerHTML = rows.map(([lbl,val],i)=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;${i<rows.length-1?'border-bottom:1px solid var(--border)':''}">
+        <span style="font-size:13px;color:var(--text2)">${lbl}</span>
+        <span style="font-family:Syne,sans-serif;font-weight:700;font-size:${i===rows.length-1?'16':'14'}px;${i===rows.length-1?'color:var(--accent)':''}">${fmt(val)}</span>
+      </div>`).join('');
+  }
 
   // ── Citas de hoy ──
   const ch = el('dash-citas-hoy');
@@ -1130,7 +1135,7 @@ function openDeleteAll(){
           <input id="del-confirm" placeholder="BORRAR TODO" oninput="document.getElementById('btn-del-all').disabled=this.value!=='BORRAR TODO'"/>
         </div>
         <div style="display:flex;flex-direction:column;gap:8px">
-          ${['clientes','ventas','pagos','citas','catalogo','empleados','invLog'].map(col=>`
+          ${['clientes','ventas','pagos','citas','catalogo','empleados','invLog','devoluciones'].map(col=>`
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
             <input type="checkbox" id="del-${col}" checked style="width:auto"/> ${col.charAt(0).toUpperCase()+col.slice(1)}
           </label>`).join('')}
@@ -1148,7 +1153,7 @@ function openDeleteAll(){
 }
 
 async function execDeleteAll(){
-  const cols = ['clientes','ventas','pagos','citas','catalogo','empleados','invLog'].filter(c=>document.getElementById('del-'+c)?.checked);
+  const cols = ['clientes','ventas','pagos','citas','catalogo','empleados','invLog','devoluciones'].filter(c=>document.getElementById('del-'+c)?.checked);
   closeModal();
   toast('Borrando datos…','warn');
   try{
@@ -1197,6 +1202,7 @@ function renderPOS(){
           <option value="producto">Productos</option>
         </select>
         <button class="btn btn-ghost btn-icon" onclick="openPOSScanner()" title="Escanear código de barras">📷</button>
+        <button class="btn btn-ghost btn-icon" onclick="openDevolucionesPOS()" title="Devoluciones / Reembolsos">↩️</button>
       </div>
       <div id="pos-items" style="flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;align-content:start;padding-right:2px"></div>
     </div>
@@ -1415,6 +1421,278 @@ async function confirmarVenta(){
     renderCart();
     const cn = document.getElementById('pos-client-name');
     if(cn) cn.textContent='Sin cliente';
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  DEVOLUCIONES / REEMBOLSOS
+//  No se borra ni modifica la venta original — se registra un
+//  documento de devolución vinculado, y se marca en la venta
+//  cuánto de cada item ya fue reembolsado (soporta parciales).
+// ═══════════════════════════════════════════════════════════
+
+function cantidadDisponibleParaDevolver(venta, itemId){
+  const item = (venta.items||[]).find(i=>i.id===itemId);
+  if(!item) return 0;
+  const yaDevuelto = (venta.reembolsado||{})[itemId] || 0;
+  return Math.max(0, item.qty - yaDevuelto);
+}
+
+// Busca la venta en S.ventas (módulo Ventas) o en el pool temporal cargado
+// desde el POS (window._devVentasPOS), para que el mismo modal sirva en ambos flujos.
+function buscarVentaParaDevolucion(ventaId){
+  return S.ventas.find(v=>v.id===ventaId) || (window._devVentasPOS||[]).find(v=>v.id===ventaId);
+}
+
+// ── Entrada desde el POS — empleados ven solo lo suyo, admin/gerente ven todo ──
+async function openDevolucionesPOS(){
+  showModal(`
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal modal-lg">
+      <div class="modal-header"><h2>↩️ Devoluciones / Reembolsos</h2><button class="modal-close" onclick="closeModal()">✕</button></div>
+      <div class="modal-body">
+        <input id="devpos-search" placeholder="🔍 Buscar por nombre del cliente…" oninput="renderDevPOSList()"/>
+        <div id="devpos-list" style="max-height:420px;overflow-y:auto;display:flex;flex-direction:column;gap:8px">
+          <div class="empty" style="padding:20px"><div class="empty-icon">⏳</div><p>Cargando ventas recientes…</p></div>
+        </div>
+      </div>
+    </div>
+  </div>`);
+
+  try{
+    const esEmpleadoRaso = S.role==='empleado';
+    const myId = S.empData?.id;
+    let query = esEmpleadoRaso
+      ? col('ventas').where('empleadoId','==',myId).orderBy('fecha','desc').limit(100)
+      : col('ventas').orderBy('fecha','desc').limit(100);
+    const snap = await query.get();
+    let ventas = snap.docs.map(d=>({id:d.id,...d.data()}));
+    window._devVentasPOS = ventas;
+    renderDevPOSList();
+  }catch(e){
+    const list = document.getElementById('devpos-list');
+    if(list) list.innerHTML = `<div class="empty" style="padding:20px"><p>Error al cargar: ${e.message}</p></div>`;
+  }
+}
+
+function renderDevPOSList(){
+  const list = document.getElementById('devpos-list'); if(!list) return;
+  const q = (document.getElementById('devpos-search')?.value||'').toLowerCase();
+  let ventas = window._devVentasPOS||[];
+  if(q) ventas = ventas.filter(v=>(v.clienteNombre||'').toLowerCase().includes(q));
+
+  if(!ventas.length){ list.innerHTML='<div class="empty" style="padding:20px"><p>Sin ventas encontradas</p></div>'; return; }
+
+  list.innerHTML = ventas.slice(0,40).map(v=>{
+    const estado = v.estadoReembolso;
+    const estadoBadge = estado==='total' ? '<span class="badge badge-red">Reembolsada</span>' : estado==='parcial' ? '<span class="badge badge-gold">Parcial</span>' : '';
+    return `
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div style="flex:1;min-width:140px">
+        <div style="font-size:13.5px;font-weight:600">${v.clienteNombre||'Sin cliente'} ${estadoBadge}</div>
+        <div style="font-size:12px;color:var(--text3)">${fmtDate(v.fecha)} · ${(v.items||[]).map(i=>`${i.nombre} x${i.qty}`).join(', ')}</div>
+      </div>
+      <div style="font-family:Syne,sans-serif;font-weight:700;color:var(--accent)">${fmt(v.total)}</div>
+      ${estado!=='total'?`<button class="btn btn-danger btn-sm" onclick="closeModal();openDevolucionModal('${v.id}')">↩️ Devolver</button>`:''}
+    </div>`;
+  }).join('');
+}
+
+function openDevolucionModal(ventaId){
+  const venta = buscarVentaParaDevolucion(ventaId);
+  if(!venta){ toast('Venta no encontrada','error'); return; }
+
+  const itemsConDisponible = (venta.items||[]).map(it=>({
+    ...it,
+    disponible: cantidadDisponibleParaDevolver(venta, it.id)
+  }));
+
+  if(itemsConDisponible.every(it=>it.disponible<=0)){
+    toast('Esta venta ya fue reembolsada completamente','warn');
+    return;
+  }
+
+  showModal(`
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2>↩️ Devolución / Reembolso</h2>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size:12.5px;color:var(--text3)">
+          Venta del ${fmtDate(venta.fecha)} · Cliente: <strong style="color:var(--text2)">${venta.clienteNombre||'Sin cliente'}</strong> · Total original: <strong style="color:var(--accent)">${fmt(venta.total)}</strong>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px" id="dev-items">
+          ${itemsConDisponible.map((it,idx)=>`
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;${it.disponible<=0?'opacity:.4':''}">
+            <label style="display:flex;align-items:center;gap:8px;flex:1;min-width:160px;cursor:${it.disponible>0?'pointer':'not-allowed'}">
+              <input type="checkbox" class="dev-chk" data-idx="${idx}" style="width:auto" ${it.disponible<=0?'disabled':''} onchange="updateDevQtyState(${idx})"/>
+              <span style="font-size:13.5px;font-weight:600">${it.nombre}</span>
+              <span class="badge ${it.tipo==='servicio'?'badge-blue':'badge-green'}" style="font-size:10px">${it.tipo==='servicio'?'Servicio':'Producto'}</span>
+            </label>
+            <div style="font-size:12px;color:var(--text3)">Comprado: ${it.qty} · Disponible: ${it.disponible}</div>
+            <input type="number" class="dev-qty" data-idx="${idx}" min="0" max="${it.disponible}" value="0" disabled style="width:70px" onchange="this.value=Math.min(Math.max(0,parseInt(this.value)||0),${it.disponible})"/>
+            <span style="font-size:12.5px;color:var(--text3)">x ${fmt(it.precio)}</span>
+          </div>`).join('')}
+        </div>
+        <div class="field"><label>Motivo de la devolución *</label>
+          <select id="dev-motivo">
+            <option value="">Selecciona un motivo…</option>
+            <option value="dañado">Producto dañado / defectuoso</option>
+            <option value="equivocado">Producto/servicio equivocado</option>
+            <option value="cliente_no_satisfecho">Cliente no satisfecho</option>
+            <option value="error_cobro">Error en el cobro</option>
+            <option value="otro">Otro</option>
+          </select>
+        </div>
+        <div class="field" id="dev-otro-wrap" style="display:none"><label>Especifica el motivo</label><input id="dev-motivo-otro" placeholder="Describe el motivo…"/></div>
+        <div class="field"><label>Notas adicionales</label><textarea id="dev-notas" rows="2" placeholder="Detalles opcionales…"></textarea></div>
+        <div id="dev-stock-wrap" style="display:none">
+          <div class="field"><label>¿El producto físico regresa al inventario?</label>
+            <select id="dev-stock-decision">
+              <option value="regresa">Sí — regresa al inventario (puede revenderse)</option>
+              <option value="descarta">No — se perdió o está dañado (no regresa)</option>
+            </select>
+          </div>
+        </div>
+        <div style="background:var(--surface);border-radius:8px;padding:12px;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:13px;color:var(--text2)">Total a reembolsar</span>
+          <span id="dev-total" style="font-family:Syne,sans-serif;font-weight:700;font-size:18px;color:var(--red)">$0</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-danger" id="btn-confirm-dev" onclick="confirmarDevolucion('${ventaId}')">↩️ Confirmar devolución</button>
+      </div>
+    </div>
+  </div>`);
+
+  // Store items data on a temp var for calculation access
+  window._devItemsTemp = itemsConDisponible;
+
+  document.getElementById('dev-motivo').addEventListener('change', e=>{
+    document.getElementById('dev-otro-wrap').style.display = e.target.value==='otro' ? 'block' : 'none';
+  });
+  document.querySelectorAll('.dev-qty').forEach(inp=>inp.addEventListener('input', recalcDevTotal));
+  recalcDevTotal();
+}
+
+function updateDevQtyState(idx){
+  const chk = document.querySelector(`.dev-chk[data-idx="${idx}"]`);
+  const qtyInput = document.querySelector(`.dev-qty[data-idx="${idx}"]`);
+  if(!chk||!qtyInput) return;
+  qtyInput.disabled = !chk.checked;
+  if(chk.checked && qtyInput.value==='0'){
+    const max = parseInt(qtyInput.max)||0;
+    qtyInput.value = max>0 ? 1 : 0;
+  } else if(!chk.checked){
+    qtyInput.value = 0;
+  }
+  recalcDevTotal();
+}
+
+function recalcDevTotal(){
+  const items = window._devItemsTemp||[];
+  let total = 0;
+  let tieneProductoFisico = false;
+  document.querySelectorAll('.dev-qty').forEach(inp=>{
+    const idx = parseInt(inp.dataset.idx);
+    const qty = parseInt(inp.value)||0;
+    const it = items[idx];
+    if(it && qty>0){
+      total += qty * it.precio;
+      if(it.tipo==='producto') tieneProductoFisico = true;
+    }
+  });
+  const totalEl = document.getElementById('dev-total');
+  if(totalEl) totalEl.textContent = fmt(total);
+  const stockWrap = document.getElementById('dev-stock-wrap');
+  if(stockWrap) stockWrap.style.display = tieneProductoFisico ? 'block' : 'none';
+}
+
+async function confirmarDevolucion(ventaId){
+  const venta = buscarVentaParaDevolucion(ventaId);
+  if(!venta){ toast('Venta no encontrada','error'); return; }
+
+  const motivoSel = document.getElementById('dev-motivo').value;
+  if(!motivoSel){ toast('Selecciona un motivo','warn'); return; }
+  const motivo = motivoSel==='otro' ? (document.getElementById('dev-motivo-otro').value.trim()||'Otro') : motivoSel;
+  const notas = document.getElementById('dev-notas').value.trim();
+  const stockDecision = document.getElementById('dev-stock-decision')?.value || 'regresa';
+
+  const items = window._devItemsTemp||[];
+  const itemsADevolver = [];
+  document.querySelectorAll('.dev-qty').forEach(inp=>{
+    const idx = parseInt(inp.dataset.idx);
+    const qty = parseInt(inp.value)||0;
+    const it = items[idx];
+    if(it && qty>0) itemsADevolver.push({...it, qtyDevuelta: qty});
+  });
+
+  if(!itemsADevolver.length){ toast('Selecciona al menos un item a devolver','warn'); return; }
+
+  const montoTotal = itemsADevolver.reduce((a,i)=>a+i.qtyDevuelta*i.precio,0);
+  const empNombre = S.empData?.nombre || S.user?.email?.split('@')[0] || 'Admin';
+  const empId = S.empData?.id || S.user?.uid || null;
+
+  try{
+    const batch = db.batch();
+
+    // 1. Registrar la devolución como documento aparte (no se toca la venta original)
+    const devRef = col('devoluciones').doc();
+    batch.set(devRef,{
+      ventaId, motivo, notas,
+      items: itemsADevolver.map(i=>({id:i.id, nombre:i.nombre, tipo:i.tipo, qty:i.qtyDevuelta, precio:i.precio})),
+      monto: montoTotal,
+      clienteId: venta.clienteId||null, clienteNombre: venta.clienteNombre||'Sin cliente',
+      empleadoId: empId, empleadoNombre: empNombre,
+      stockDecision: itemsADevolver.some(i=>i.tipo==='producto') ? stockDecision : null,
+      fecha: tsNow()
+    });
+
+    // 2. Marcar en la venta original cuánto se ha reembolsado por item
+    const reembolsadoActual = {...(venta.reembolsado||{})};
+    for(const it of itemsADevolver){
+      reembolsadoActual[it.id] = (reembolsadoActual[it.id]||0) + it.qtyDevuelta;
+    }
+    const totalReembolsadoQty = Object.values(reembolsadoActual).reduce((a,v)=>a+v,0);
+    const totalItemsQty = (venta.items||[]).reduce((a,i)=>a+i.qty,0);
+    const estadoReembolso = totalReembolsadoQty>=totalItemsQty ? 'total' : 'parcial';
+    batch.update(col('ventas').doc(ventaId), {reembolsado: reembolsadoActual, estadoReembolso});
+
+    // 3. Si hay productos físicos y el stock regresa, devolverlo al inventario + log
+    if(stockDecision==='regresa'){
+      for(const it of itemsADevolver){
+        if(it.tipo==='producto'){
+          batch.update(col('catalogo').doc(it.id), {stock: firebase.firestore.FieldValue.increment(it.qtyDevuelta)});
+          const logRef = col('invLog').doc();
+          batch.set(logRef,{
+            productoId:it.id, nombre:it.nombre, tipo:'entrada',
+            cantidad:it.qtyDevuelta, motivo:'Devolución de venta', fecha:tsNow(),
+            stockDespues: (S.catalogo.find(c=>c.id===it.id)?.stock||0) + it.qtyDevuelta
+          });
+        }
+      }
+    } else {
+      for(const it of itemsADevolver){
+        if(it.tipo==='producto'){
+          const logRef = col('invLog').doc();
+          batch.set(logRef,{
+            productoId:it.id, nombre:it.nombre, tipo:'salida',
+            cantidad:0, motivo:'Devolución — producto descartado (dañado/perdido), no regresa a stock', fecha:tsNow(),
+            stockDespues: S.catalogo.find(c=>c.id===it.id)?.stock||0
+          });
+        }
+      }
+    }
+
+    // 4. Si el cliente había quedado con deuda asociada por error de cobro, no se toca aquí
+    //    (las devoluciones son independientes de los cobros manuales / pagos).
+
+    await batch.commit();
+    toast(`Devolución registrada: ${fmt(montoTotal)} ✅`);
+    closeModal();
   }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
@@ -2472,6 +2750,11 @@ document.addEventListener('click', function(e){
     const id = el.dataset.cid;
     if(id && typeof deleteVenta==='function') deleteVenta(id);
   }
+  // Devolución / Reembolso
+  else if(cls.includes('cf-devolver-venta')){
+    const id = el.dataset.cid;
+    if(id && typeof openDevolucionModal==='function') openDevolucionModal(id);
+  }
 });
 </script>
 <script>
@@ -2745,6 +3028,7 @@ function renderVentas(){
 
   listen('ventas','ventas', ()=>{ fillEmpFilter(); renderVentasTable(); });
   listen('empleados','empleados', fillEmpFilter);
+  listen('devoluciones','devoluciones', ()=>{});
 }
 
 function fillEmpFilter(){
@@ -2780,8 +3064,12 @@ function renderVentasTable(){
   if(!list.length){ t.innerHTML='<div class="empty"><div class="empty-icon">💰</div><p>Sin ventas en el período</p></div>'; return; }
 
   t.innerHTML = `<table>
-    <thead><tr><th>Fecha</th><th>Cliente</th><th>Items</th><th>Total</th><th>Método</th><th>Empleado</th><th>Tipo</th></tr></thead>
-    <tbody>${list.slice(0,100).map(v=>`<tr>
+    <thead><tr><th>Fecha</th><th>Cliente</th><th>Items</th><th>Total</th><th>Método</th><th>Empleado</th><th>Tipo</th><th>Estado</th><th></th></tr></thead>
+    <tbody>${list.slice(0,100).map(v=>{
+      const estado = v.estadoReembolso;
+      const estadoBadge = estado==='total' ? '<span class="badge badge-red">Reembolsada</span>' : estado==='parcial' ? '<span class="badge badge-gold">Parcial</span>' : '<span class="badge badge-green">OK</span>';
+      const puedeDevolver = estado!=='total';
+      return `<tr>
       <td class="text-muted text-xs">${fmtDate(v.fecha)} ${fmtTime(v.fecha)}</td>
       <td class="text-sm">${v.clienteNombre||'Sin cliente'}</td>
       <td class="text-sm text-muted" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(v.items||[]).map(i=>`${i.nombre} x${i.qty}`).join(', ')}</td>
@@ -2789,7 +3077,9 @@ function renderVentasTable(){
       <td class="text-sm text-muted">${v.metodo||'—'}</td>
       <td class="text-sm text-muted">${v.empleadoNombre||'—'}</td>
       <td><span class="badge ${v.tipo==='servicio'?'badge-blue':'badge-green'}" style="font-size:10.5px">${v.tipo==='servicio'?'Servicio':'Producto'}</span></td>
-    </tr>`).join('')}</tbody>
+      <td>${estadoBadge}</td>
+      <td>${puedeDevolver?`<button class="btn btn-ghost btn-sm cf-devolver-venta" data-cid="${v.id}">↩️ Devolver</button>`:''}</td>
+    </tr>`;}).join('')}</tbody>
   </table>`;
 }
 
