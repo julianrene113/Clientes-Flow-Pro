@@ -341,10 +341,10 @@ tr:hover td{background:rgba(18,32,22,.6)}
       <div class="nav-item admin-only" data-page="whatsapp" onclick="go('whatsapp')"><span class="ni">💬</span><span class="nl">WhatsApp</span></div>
       <div class="nav-item admin-only" data-page="exportar" onclick="go('exportar')"><span class="ni">⬇️</span><span class="nl">Exportar</span></div>
 
-      <div class="nav-section-label owner-only">Admin</div>
-      <div class="nav-item owner-only" data-page="empleados" onclick="go('empleados')"><span class="ni">👤</span><span class="nl">Empleados</span></div>
-      <div class="nav-item owner-only" data-page="config" onclick="go('config')"><span class="ni">⚙️</span><span class="nl">Configuración</span></div>
-      <div class="nav-item owner-only" data-page="politicas" onclick="go('politicas')"><span class="ni">📋</span><span class="nl">Políticas & T&C</span></div>
+      <div class="nav-section-label admin-only">Admin</div>
+      <div class="nav-item admin-only" data-page="empleados" onclick="go('empleados')"><span class="ni">👤</span><span class="nl">Empleados</span></div>
+      <div class="nav-item admin-only" data-page="config" onclick="go('config')"><span class="ni">⚙️</span><span class="nl">Configuración</span></div>
+      <div class="nav-item admin-only" data-page="politicas" onclick="go('politicas')"><span class="ni">📋</span><span class="nl">Políticas & T&C</span></div>
     </div>
 
     <div class="sidebar-bottom">
@@ -428,7 +428,6 @@ const S = {
   citas: [],
   empleados: [],
   invLog: [],
-  devoluciones: [],
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -631,22 +630,13 @@ async function loginEmp(){
     if(!snap.exists){ setLoginError('Usuario no encontrado'); return; }
     const data = snap.data();
     if(data.password!==pass){ setLoginError('Contraseña incorrecta'); return; }
-    // Employees aren't Firebase Auth users — sign in anonymously so
-    // request.auth exists and Firestore security rules don't block reads.
-    // The real gate is the username/password check above.
-    if(!auth.currentUser){
-      await auth.signInAnonymously();
-    }
     S.uid = data.adminUid;
     S.role = data.rol||'empleado';
     S.empData = {id:snap.id,...data};
     localStorage.setItem('lastEmpUser',user);
     await loadConfig();
     enterApp();
-  }catch(e){
-    const msgs={'auth/operation-not-allowed':'Falta activar "Anónimo" en Firebase Console → Authentication → Sign-in method'};
-    setLoginError(msgs[e.code]||e.message);
-  }
+  }catch(e){ setLoginError(e.message); }
 }
 
 async function resetPassword(){
@@ -677,12 +667,9 @@ function enterApp(){
   if(!S.uid){ console.error('enterApp called without uid'); return; }
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
-  // Admin-only elements: visible to admin + gerente (operational management)
+  // Admin-only elements
   const isAdmin = S.role==='admin'||S.role==='gerente';
   document.querySelectorAll('.admin-only').forEach(el=>el.classList.toggle('hidden',!isAdmin));
-  // Owner-only elements: visible ONLY to the real admin/dueño (Empleados, Config, Políticas)
-  const isOwner = S.role==='admin';
-  document.querySelectorAll('.owner-only').forEach(el=>el.classList.toggle('hidden',!isOwner));
   // Sidebar info
   const name = S.empData?.nombre || S.user?.email?.split('@')[0] || 'Admin';
   document.getElementById('sb-bizname').textContent = S.bizName;
@@ -697,20 +684,18 @@ async function doLogout(){
   stopListeners();
   try{ await auth.signOut(); }catch(e){}
   S.uid=null; S.user=null; S.role='admin'; S.empData=null;
-  S.clientes=[]; S.catalogo=[]; S.ventas=[]; S.pagos=[]; S.citas=[]; S.empleados=[]; S.invLog=[]; S.devoluciones=[];
+  S.clientes=[]; S.catalogo=[]; S.ventas=[]; S.pagos=[]; S.citas=[]; S.empleados=[]; S.invLog=[];
   document.getElementById('app').classList.add('hidden');
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('admin-pass').value='';
-  document.getElementById('emp-pass').value='';
   document.getElementById('login-error').textContent='';
   document.getElementById('role-select').style.display='';
   showLogin();
-  selectRole('admin');
 }
 
 // Auto-login if Firebase session exists
 auth.onAuthStateChanged(user=>{
-  if(user && !user.isAnonymous && !S.uid){
+  if(user && !S.uid){
     S.user=user; S.uid=user.uid; S.role='admin';
     loadConfig().then(()=>enterApp());
   }
@@ -729,11 +714,6 @@ const PAGE_TITLES = {
 };
 
 function go(page, params={}){
-  const OWNER_ONLY_PAGES = ['empleados','config','politicas'];
-  if(OWNER_ONLY_PAGES.includes(page) && S.role!=='admin'){
-    toast('No tienes permiso para acceder a esta sección','warn');
-    page = 'dashboard';
-  }
   stopListeners();
   S.page = page;
   // Update nav items
@@ -894,10 +874,9 @@ document.getElementById('reg-pass2').addEventListener('keydown',e=>{ if(e.key===
 // ── DASHBOARD ──────────────────────────────────────────────
 function renderDashboard(){
   const c = document.getElementById('content');
-  const isOwnerView = S.role==='admin';
   c.innerHTML = `
   <div class="stat-grid" id="dash-stats">
-    <div class="stat-card"><div class="sc-label">${isOwnerView?'Ingresos del mes':'Mis ventas del mes'}</div><div class="sc-value text-accent" id="ds-ingresos">…</div><div class="sc-sub" id="ds-ingresos-sub"></div></div>
+    <div class="stat-card"><div class="sc-label">Ingresos del mes</div><div class="sc-value text-accent" id="ds-ingresos">…</div><div class="sc-sub" id="ds-ingresos-sub"></div></div>
     <div class="stat-card"><div class="sc-label">Clientes activos</div><div class="sc-value" id="ds-clientes">…</div><div class="sc-sub">total registrados</div></div>
     <div class="stat-card"><div class="sc-label">Citas hoy</div><div class="sc-value" id="ds-citas">…</div><div class="sc-sub" id="ds-citas-sub"></div></div>
     <div class="stat-card"><div class="sc-label">Cobros pendientes</div><div class="sc-value text-red" id="ds-deuda">…</div><div class="sc-sub" id="ds-deuda-sub"></div></div>
@@ -906,11 +885,11 @@ function renderDashboard(){
   <div style="display:grid;grid-template-columns:1fr 340px;gap:18px" id="dash-grid">
     <div style="display:flex;flex-direction:column;gap:16px">
       <div class="card">
-        <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:14px">📊 ${isOwnerView?'Ingresos por mes (últimos 6)':'Mis ventas por mes (últimos 6)'}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:14px">📊 Ingresos por mes (últimos 6)</div>
         <canvas id="chart-ingresos" height="160"></canvas>
       </div>
       <div class="card">
-        <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:12px">🗂 ${isOwnerView?'Resumen financiero del mes':'Resumen de mis ventas'}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:12px">🗂 Resumen financiero del mes</div>
         <div id="dash-resumen"></div>
       </div>
     </div>
@@ -954,15 +933,12 @@ function updateDash(){
   const today = new Date(); today.setHours(0,0,0,0);
   const tomorrow = new Date(today); tomorrow.setDate(today.getDate()+1);
   const startMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-  const isOwnerView = S.role==='admin';
-  const myId = S.role==='admin' ? S.user?.uid : S.empData?.id;
 
   // ── Stats ──
-  const ventasBase = isOwnerView ? S.ventas : S.ventas.filter(v=>v.empleadoId===myId);
-  const monthV = ventasBase.filter(v=>{ const d=toDate(v.fecha); return d&&d>=startMonth; });
+  const monthV = S.ventas.filter(v=>{ const d=toDate(v.fecha); return d&&d>=startMonth; });
   const ingServ = monthV.filter(v=>v.tipo==='servicio').reduce((a,v)=>a+(v.total||0),0);
   const ingProd = monthV.filter(v=>v.tipo!=='servicio').reduce((a,v)=>a+(v.total||0),0);
-  const ingPagos = isOwnerView ? S.pagos.filter(p=>{ const d=toDate(p.fecha); return d&&d>=startMonth&&p.estado==='cobrado'; }).reduce((a,p)=>a+(p.monto||0),0) : 0;
+  const ingPagos = S.pagos.filter(p=>{ const d=toDate(p.fecha); return d&&d>=startMonth&&p.estado==='cobrado'; }).reduce((a,p)=>a+(p.monto||0),0);
   const total = ingServ + ingProd + ingPagos;
 
   const el = id=>document.getElementById(id);
@@ -975,8 +951,8 @@ function updateDash(){
   if(el('ds-citas-sub')) el('ds-citas-sub').textContent = citasHoy.filter(c=>c.estado==='pendiente'||!c.estado).length + ' pendientes';
 
   const deudaTotal = S.clientes.reduce((a,cl)=>a+Math.max(0,cl.deuda||0),0);
-  if(el('ds-deuda')) el('ds-deuda').textContent = isOwnerView ? fmt(deudaTotal) : '—';
-  if(el('ds-deuda-sub')) el('ds-deuda-sub').textContent = isOwnerView ? (S.clientes.filter(cl=>(cl.deuda||0)>0).length + ' clientes con deuda') : 'Visible solo para el administrador';
+  if(el('ds-deuda')) el('ds-deuda').textContent = fmt(deudaTotal);
+  if(el('ds-deuda-sub')) el('ds-deuda-sub').textContent = S.clientes.filter(cl=>(cl.deuda||0)>0).length + ' clientes con deuda';
 
   // ── Chart ──
   const ctx = el('chart-ingresos');
@@ -987,8 +963,8 @@ function updateDash(){
       months.push(d.toLocaleDateString('es-CO',{month:'short'}));
       const s = new Date(d.getFullYear(), d.getMonth(), 1);
       const e = new Date(d.getFullYear(), d.getMonth()+1, 1);
-      const t = ventasBase.filter(v=>{const dd=toDate(v.fecha);return dd&&dd>=s&&dd<e;}).reduce((a,v)=>a+(v.total||0),0)
-              + (isOwnerView ? S.pagos.filter(p=>{const dd=toDate(p.fecha);return dd&&dd>=s&&dd<e&&p.estado==='cobrado';}).reduce((a,p)=>a+(p.monto||0),0) : 0);
+      const t = S.ventas.filter(v=>{const dd=toDate(v.fecha);return dd&&dd>=s&&dd<e;}).reduce((a,v)=>a+(v.total||0),0)
+              + S.pagos.filter(p=>{const dd=toDate(p.fecha);return dd&&dd>=s&&dd<e&&p.estado==='cobrado';}).reduce((a,p)=>a+(p.monto||0),0);
       vals.push(t);
     }
     if(dashChart) dashChart.destroy();
@@ -1004,16 +980,16 @@ function updateDash(){
 
   // ── Resumen financiero ──
   const res = el('dash-resumen');
-  if(res){
-    const rows = isOwnerView
-      ? [['💇 Servicios', ingServ],['📦 Productos', ingProd],['💳 Cobros manuales', ingPagos],['💰 Total', total]]
-      : [['💇 Servicios', ingServ],['📦 Productos', ingProd],['💰 Total vendido por mí', total]];
-    res.innerHTML = rows.map(([lbl,val],i)=>`
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;${i<rows.length-1?'border-bottom:1px solid var(--border)':''}">
-        <span style="font-size:13px;color:var(--text2)">${lbl}</span>
-        <span style="font-family:Syne,sans-serif;font-weight:700;font-size:${i===rows.length-1?'16':'14'}px;${i===rows.length-1?'color:var(--accent)':''}">${fmt(val)}</span>
-      </div>`).join('');
-  }
+  if(res) res.innerHTML = [
+    ['💇 Servicios', ingServ],
+    ['📦 Productos', ingProd],
+    ['💳 Cobros manuales', ingPagos],
+    ['💰 Total', total]
+  ].map(([lbl,val],i)=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;${i<3?'border-bottom:1px solid var(--border)':''}">
+      <span style="font-size:13px;color:var(--text2)">${lbl}</span>
+      <span style="font-family:Syne,sans-serif;font-weight:700;font-size:${i===3?'16':'14'}px;${i===3?'color:var(--accent)':''}">${fmt(val)}</span>
+    </div>`).join('');
 
   // ── Citas de hoy ──
   const ch = el('dash-citas-hoy');
@@ -1135,7 +1111,7 @@ function openDeleteAll(){
           <input id="del-confirm" placeholder="BORRAR TODO" oninput="document.getElementById('btn-del-all').disabled=this.value!=='BORRAR TODO'"/>
         </div>
         <div style="display:flex;flex-direction:column;gap:8px">
-          ${['clientes','ventas','pagos','citas','catalogo','empleados','invLog','devoluciones'].map(col=>`
+          ${['clientes','ventas','pagos','citas','catalogo','empleados','invLog'].map(col=>`
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
             <input type="checkbox" id="del-${col}" checked style="width:auto"/> ${col.charAt(0).toUpperCase()+col.slice(1)}
           </label>`).join('')}
@@ -1153,7 +1129,7 @@ function openDeleteAll(){
 }
 
 async function execDeleteAll(){
-  const cols = ['clientes','ventas','pagos','citas','catalogo','empleados','invLog','devoluciones'].filter(c=>document.getElementById('del-'+c)?.checked);
+  const cols = ['clientes','ventas','pagos','citas','catalogo','empleados','invLog'].filter(c=>document.getElementById('del-'+c)?.checked);
   closeModal();
   toast('Borrando datos…','warn');
   try{
@@ -1202,7 +1178,6 @@ function renderPOS(){
           <option value="producto">Productos</option>
         </select>
         <button class="btn btn-ghost btn-icon" onclick="openPOSScanner()" title="Escanear código de barras">📷</button>
-        <button class="btn btn-ghost btn-icon" onclick="openDevolucionesPOS()" title="Devoluciones / Reembolsos">↩️</button>
       </div>
       <div id="pos-items" style="flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;align-content:start;padding-right:2px"></div>
     </div>
@@ -1424,278 +1399,6 @@ async function confirmarVenta(){
   }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
-// ═══════════════════════════════════════════════════════════
-//  DEVOLUCIONES / REEMBOLSOS
-//  No se borra ni modifica la venta original — se registra un
-//  documento de devolución vinculado, y se marca en la venta
-//  cuánto de cada item ya fue reembolsado (soporta parciales).
-// ═══════════════════════════════════════════════════════════
-
-function cantidadDisponibleParaDevolver(venta, itemId){
-  const item = (venta.items||[]).find(i=>i.id===itemId);
-  if(!item) return 0;
-  const yaDevuelto = (venta.reembolsado||{})[itemId] || 0;
-  return Math.max(0, item.qty - yaDevuelto);
-}
-
-// Busca la venta en S.ventas (módulo Ventas) o en el pool temporal cargado
-// desde el POS (window._devVentasPOS), para que el mismo modal sirva en ambos flujos.
-function buscarVentaParaDevolucion(ventaId){
-  return S.ventas.find(v=>v.id===ventaId) || (window._devVentasPOS||[]).find(v=>v.id===ventaId);
-}
-
-// ── Entrada desde el POS — empleados ven solo lo suyo, admin/gerente ven todo ──
-async function openDevolucionesPOS(){
-  showModal(`
-  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
-    <div class="modal modal-lg">
-      <div class="modal-header"><h2>↩️ Devoluciones / Reembolsos</h2><button class="modal-close" onclick="closeModal()">✕</button></div>
-      <div class="modal-body">
-        <input id="devpos-search" placeholder="🔍 Buscar por nombre del cliente…" oninput="renderDevPOSList()"/>
-        <div id="devpos-list" style="max-height:420px;overflow-y:auto;display:flex;flex-direction:column;gap:8px">
-          <div class="empty" style="padding:20px"><div class="empty-icon">⏳</div><p>Cargando ventas recientes…</p></div>
-        </div>
-      </div>
-    </div>
-  </div>`);
-
-  try{
-    const esEmpleadoRaso = S.role==='empleado';
-    const myId = S.empData?.id;
-    let query = esEmpleadoRaso
-      ? col('ventas').where('empleadoId','==',myId).orderBy('fecha','desc').limit(100)
-      : col('ventas').orderBy('fecha','desc').limit(100);
-    const snap = await query.get();
-    let ventas = snap.docs.map(d=>({id:d.id,...d.data()}));
-    window._devVentasPOS = ventas;
-    renderDevPOSList();
-  }catch(e){
-    const list = document.getElementById('devpos-list');
-    if(list) list.innerHTML = `<div class="empty" style="padding:20px"><p>Error al cargar: ${e.message}</p></div>`;
-  }
-}
-
-function renderDevPOSList(){
-  const list = document.getElementById('devpos-list'); if(!list) return;
-  const q = (document.getElementById('devpos-search')?.value||'').toLowerCase();
-  let ventas = window._devVentasPOS||[];
-  if(q) ventas = ventas.filter(v=>(v.clienteNombre||'').toLowerCase().includes(q));
-
-  if(!ventas.length){ list.innerHTML='<div class="empty" style="padding:20px"><p>Sin ventas encontradas</p></div>'; return; }
-
-  list.innerHTML = ventas.slice(0,40).map(v=>{
-    const estado = v.estadoReembolso;
-    const estadoBadge = estado==='total' ? '<span class="badge badge-red">Reembolsada</span>' : estado==='parcial' ? '<span class="badge badge-gold">Parcial</span>' : '';
-    return `
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <div style="flex:1;min-width:140px">
-        <div style="font-size:13.5px;font-weight:600">${v.clienteNombre||'Sin cliente'} ${estadoBadge}</div>
-        <div style="font-size:12px;color:var(--text3)">${fmtDate(v.fecha)} · ${(v.items||[]).map(i=>`${i.nombre} x${i.qty}`).join(', ')}</div>
-      </div>
-      <div style="font-family:Syne,sans-serif;font-weight:700;color:var(--accent)">${fmt(v.total)}</div>
-      ${estado!=='total'?`<button class="btn btn-danger btn-sm" onclick="closeModal();openDevolucionModal('${v.id}')">↩️ Devolver</button>`:''}
-    </div>`;
-  }).join('');
-}
-
-function openDevolucionModal(ventaId){
-  const venta = buscarVentaParaDevolucion(ventaId);
-  if(!venta){ toast('Venta no encontrada','error'); return; }
-
-  const itemsConDisponible = (venta.items||[]).map(it=>({
-    ...it,
-    disponible: cantidadDisponibleParaDevolver(venta, it.id)
-  }));
-
-  if(itemsConDisponible.every(it=>it.disponible<=0)){
-    toast('Esta venta ya fue reembolsada completamente','warn');
-    return;
-  }
-
-  showModal(`
-  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
-    <div class="modal modal-lg">
-      <div class="modal-header">
-        <h2>↩️ Devolución / Reembolso</h2>
-        <button class="modal-close" onclick="closeModal()">✕</button>
-      </div>
-      <div class="modal-body">
-        <div style="font-size:12.5px;color:var(--text3)">
-          Venta del ${fmtDate(venta.fecha)} · Cliente: <strong style="color:var(--text2)">${venta.clienteNombre||'Sin cliente'}</strong> · Total original: <strong style="color:var(--accent)">${fmt(venta.total)}</strong>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:8px" id="dev-items">
-          ${itemsConDisponible.map((it,idx)=>`
-          <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;${it.disponible<=0?'opacity:.4':''}">
-            <label style="display:flex;align-items:center;gap:8px;flex:1;min-width:160px;cursor:${it.disponible>0?'pointer':'not-allowed'}">
-              <input type="checkbox" class="dev-chk" data-idx="${idx}" style="width:auto" ${it.disponible<=0?'disabled':''} onchange="updateDevQtyState(${idx})"/>
-              <span style="font-size:13.5px;font-weight:600">${it.nombre}</span>
-              <span class="badge ${it.tipo==='servicio'?'badge-blue':'badge-green'}" style="font-size:10px">${it.tipo==='servicio'?'Servicio':'Producto'}</span>
-            </label>
-            <div style="font-size:12px;color:var(--text3)">Comprado: ${it.qty} · Disponible: ${it.disponible}</div>
-            <input type="number" class="dev-qty" data-idx="${idx}" min="0" max="${it.disponible}" value="0" disabled style="width:70px" onchange="this.value=Math.min(Math.max(0,parseInt(this.value)||0),${it.disponible})"/>
-            <span style="font-size:12.5px;color:var(--text3)">x ${fmt(it.precio)}</span>
-          </div>`).join('')}
-        </div>
-        <div class="field"><label>Motivo de la devolución *</label>
-          <select id="dev-motivo">
-            <option value="">Selecciona un motivo…</option>
-            <option value="dañado">Producto dañado / defectuoso</option>
-            <option value="equivocado">Producto/servicio equivocado</option>
-            <option value="cliente_no_satisfecho">Cliente no satisfecho</option>
-            <option value="error_cobro">Error en el cobro</option>
-            <option value="otro">Otro</option>
-          </select>
-        </div>
-        <div class="field" id="dev-otro-wrap" style="display:none"><label>Especifica el motivo</label><input id="dev-motivo-otro" placeholder="Describe el motivo…"/></div>
-        <div class="field"><label>Notas adicionales</label><textarea id="dev-notas" rows="2" placeholder="Detalles opcionales…"></textarea></div>
-        <div id="dev-stock-wrap" style="display:none">
-          <div class="field"><label>¿El producto físico regresa al inventario?</label>
-            <select id="dev-stock-decision">
-              <option value="regresa">Sí — regresa al inventario (puede revenderse)</option>
-              <option value="descarta">No — se perdió o está dañado (no regresa)</option>
-            </select>
-          </div>
-        </div>
-        <div style="background:var(--surface);border-radius:8px;padding:12px;display:flex;justify-content:space-between;align-items:center">
-          <span style="font-size:13px;color:var(--text2)">Total a reembolsar</span>
-          <span id="dev-total" style="font-family:Syne,sans-serif;font-weight:700;font-size:18px;color:var(--red)">$0</span>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
-        <button class="btn btn-danger" id="btn-confirm-dev" onclick="confirmarDevolucion('${ventaId}')">↩️ Confirmar devolución</button>
-      </div>
-    </div>
-  </div>`);
-
-  // Store items data on a temp var for calculation access
-  window._devItemsTemp = itemsConDisponible;
-
-  document.getElementById('dev-motivo').addEventListener('change', e=>{
-    document.getElementById('dev-otro-wrap').style.display = e.target.value==='otro' ? 'block' : 'none';
-  });
-  document.querySelectorAll('.dev-qty').forEach(inp=>inp.addEventListener('input', recalcDevTotal));
-  recalcDevTotal();
-}
-
-function updateDevQtyState(idx){
-  const chk = document.querySelector(`.dev-chk[data-idx="${idx}"]`);
-  const qtyInput = document.querySelector(`.dev-qty[data-idx="${idx}"]`);
-  if(!chk||!qtyInput) return;
-  qtyInput.disabled = !chk.checked;
-  if(chk.checked && qtyInput.value==='0'){
-    const max = parseInt(qtyInput.max)||0;
-    qtyInput.value = max>0 ? 1 : 0;
-  } else if(!chk.checked){
-    qtyInput.value = 0;
-  }
-  recalcDevTotal();
-}
-
-function recalcDevTotal(){
-  const items = window._devItemsTemp||[];
-  let total = 0;
-  let tieneProductoFisico = false;
-  document.querySelectorAll('.dev-qty').forEach(inp=>{
-    const idx = parseInt(inp.dataset.idx);
-    const qty = parseInt(inp.value)||0;
-    const it = items[idx];
-    if(it && qty>0){
-      total += qty * it.precio;
-      if(it.tipo==='producto') tieneProductoFisico = true;
-    }
-  });
-  const totalEl = document.getElementById('dev-total');
-  if(totalEl) totalEl.textContent = fmt(total);
-  const stockWrap = document.getElementById('dev-stock-wrap');
-  if(stockWrap) stockWrap.style.display = tieneProductoFisico ? 'block' : 'none';
-}
-
-async function confirmarDevolucion(ventaId){
-  const venta = buscarVentaParaDevolucion(ventaId);
-  if(!venta){ toast('Venta no encontrada','error'); return; }
-
-  const motivoSel = document.getElementById('dev-motivo').value;
-  if(!motivoSel){ toast('Selecciona un motivo','warn'); return; }
-  const motivo = motivoSel==='otro' ? (document.getElementById('dev-motivo-otro').value.trim()||'Otro') : motivoSel;
-  const notas = document.getElementById('dev-notas').value.trim();
-  const stockDecision = document.getElementById('dev-stock-decision')?.value || 'regresa';
-
-  const items = window._devItemsTemp||[];
-  const itemsADevolver = [];
-  document.querySelectorAll('.dev-qty').forEach(inp=>{
-    const idx = parseInt(inp.dataset.idx);
-    const qty = parseInt(inp.value)||0;
-    const it = items[idx];
-    if(it && qty>0) itemsADevolver.push({...it, qtyDevuelta: qty});
-  });
-
-  if(!itemsADevolver.length){ toast('Selecciona al menos un item a devolver','warn'); return; }
-
-  const montoTotal = itemsADevolver.reduce((a,i)=>a+i.qtyDevuelta*i.precio,0);
-  const empNombre = S.empData?.nombre || S.user?.email?.split('@')[0] || 'Admin';
-  const empId = S.empData?.id || S.user?.uid || null;
-
-  try{
-    const batch = db.batch();
-
-    // 1. Registrar la devolución como documento aparte (no se toca la venta original)
-    const devRef = col('devoluciones').doc();
-    batch.set(devRef,{
-      ventaId, motivo, notas,
-      items: itemsADevolver.map(i=>({id:i.id, nombre:i.nombre, tipo:i.tipo, qty:i.qtyDevuelta, precio:i.precio})),
-      monto: montoTotal,
-      clienteId: venta.clienteId||null, clienteNombre: venta.clienteNombre||'Sin cliente',
-      empleadoId: empId, empleadoNombre: empNombre,
-      stockDecision: itemsADevolver.some(i=>i.tipo==='producto') ? stockDecision : null,
-      fecha: tsNow()
-    });
-
-    // 2. Marcar en la venta original cuánto se ha reembolsado por item
-    const reembolsadoActual = {...(venta.reembolsado||{})};
-    for(const it of itemsADevolver){
-      reembolsadoActual[it.id] = (reembolsadoActual[it.id]||0) + it.qtyDevuelta;
-    }
-    const totalReembolsadoQty = Object.values(reembolsadoActual).reduce((a,v)=>a+v,0);
-    const totalItemsQty = (venta.items||[]).reduce((a,i)=>a+i.qty,0);
-    const estadoReembolso = totalReembolsadoQty>=totalItemsQty ? 'total' : 'parcial';
-    batch.update(col('ventas').doc(ventaId), {reembolsado: reembolsadoActual, estadoReembolso});
-
-    // 3. Si hay productos físicos y el stock regresa, devolverlo al inventario + log
-    if(stockDecision==='regresa'){
-      for(const it of itemsADevolver){
-        if(it.tipo==='producto'){
-          batch.update(col('catalogo').doc(it.id), {stock: firebase.firestore.FieldValue.increment(it.qtyDevuelta)});
-          const logRef = col('invLog').doc();
-          batch.set(logRef,{
-            productoId:it.id, nombre:it.nombre, tipo:'entrada',
-            cantidad:it.qtyDevuelta, motivo:'Devolución de venta', fecha:tsNow(),
-            stockDespues: (S.catalogo.find(c=>c.id===it.id)?.stock||0) + it.qtyDevuelta
-          });
-        }
-      }
-    } else {
-      for(const it of itemsADevolver){
-        if(it.tipo==='producto'){
-          const logRef = col('invLog').doc();
-          batch.set(logRef,{
-            productoId:it.id, nombre:it.nombre, tipo:'salida',
-            cantidad:0, motivo:'Devolución — producto descartado (dañado/perdido), no regresa a stock', fecha:tsNow(),
-            stockDespues: S.catalogo.find(c=>c.id===it.id)?.stock||0
-          });
-        }
-      }
-    }
-
-    // 4. Si el cliente había quedado con deuda asociada por error de cobro, no se toca aquí
-    //    (las devoluciones son independientes de los cobros manuales / pagos).
-
-    await batch.commit();
-    toast(`Devolución registrada: ${fmt(montoTotal)} ✅`);
-    closeModal();
-  }catch(e){ toast('Error: '+e.message,'error'); }
-}
-
 // ── BARCODE SCANNER ──
 let scanStream=null, scanInterval=null;
 
@@ -1842,9 +1545,9 @@ function openClientModal(id=null){
         <div class="form-grid">
           <div class="field"><label>Nombre completo *</label><input id="cl-nombre" value="${cl?.nombre||''}" placeholder="María López"/></div>
           <div class="field"><label>Teléfono</label>
-            <div style="display:flex;gap:6px;flex-wrap:wrap">
-              <select id="cl-tel-code" style="width:auto;min-width:88px;flex-shrink:0">${PHONE_CODES.map(([code,flag])=>`<option value="${code}"${(cl?.telefonoCode||'+57')===code?' selected':''}>${flag} ${code}</option>`).join('')}</select>
-              <input id="cl-tel" value="${cl?.telefonoNum||cl?.telefono?.replace(/^\+\d+\s/,'')||''}" placeholder="300 000 0000" style="flex:1;min-width:120px"/>
+            <div style="display:flex;gap:6px">
+              <select id="cl-tel-code" style="width:auto;min-width:100px">${PHONE_CODES.map(([code,flag])=>`<option value="${code}"${(cl?.telefonoCode||'+57')===code?' selected':''}>${flag} ${code}</option>`).join('')}</select>
+              <input id="cl-tel" value="${cl?.telefonoNum||cl?.telefono?.replace(/^\+\d+\s/,'')||''}" placeholder="300 000 0000" style="flex:1"/>
             </div>
           </div>
           <div class="field"><label>Email</label><input id="cl-email" type="email" value="${cl?.email||''}" placeholder="maria@ejemplo.com"/></div>
@@ -1980,7 +1683,7 @@ function updatePerfilStats(cl){
   if(el('ps-compras')) el('ps-compras').textContent = fmt(ventas.reduce((a,v)=>a+(v.total||0),0));
   if(el('ps-visitas'))  el('ps-visitas').textContent  = ventas.length + citas.length;
   if(el('ps-citas'))    el('ps-citas').textContent    = citas.length;
-  if(el('ps-deuda'))    el('ps-deuda').textContent    = fmt(Math.max(0,cl.deuda||0));
+  if(el('ps-deuda'))    el('ps-deuda').textContent    = fmt(cl.deuda||0);
 }
 
 function updatePerfilData(clientId){
@@ -2750,11 +2453,6 @@ document.addEventListener('click', function(e){
     const id = el.dataset.cid;
     if(id && typeof deleteVenta==='function') deleteVenta(id);
   }
-  // Devolución / Reembolso
-  else if(cls.includes('cf-devolver-venta')){
-    const id = el.dataset.cid;
-    if(id && typeof openDevolucionModal==='function') openDevolucionModal(id);
-  }
 });
 </script>
 <script>
@@ -3028,7 +2726,6 @@ function renderVentas(){
 
   listen('ventas','ventas', ()=>{ fillEmpFilter(); renderVentasTable(); });
   listen('empleados','empleados', fillEmpFilter);
-  listen('devoluciones','devoluciones', ()=>{});
 }
 
 function fillEmpFilter(){
@@ -3064,12 +2761,8 @@ function renderVentasTable(){
   if(!list.length){ t.innerHTML='<div class="empty"><div class="empty-icon">💰</div><p>Sin ventas en el período</p></div>'; return; }
 
   t.innerHTML = `<table>
-    <thead><tr><th>Fecha</th><th>Cliente</th><th>Items</th><th>Total</th><th>Método</th><th>Empleado</th><th>Tipo</th><th>Estado</th><th></th></tr></thead>
-    <tbody>${list.slice(0,100).map(v=>{
-      const estado = v.estadoReembolso;
-      const estadoBadge = estado==='total' ? '<span class="badge badge-red">Reembolsada</span>' : estado==='parcial' ? '<span class="badge badge-gold">Parcial</span>' : '<span class="badge badge-green">OK</span>';
-      const puedeDevolver = estado!=='total';
-      return `<tr>
+    <thead><tr><th>Fecha</th><th>Cliente</th><th>Items</th><th>Total</th><th>Método</th><th>Empleado</th><th>Tipo</th></tr></thead>
+    <tbody>${list.slice(0,100).map(v=>`<tr>
       <td class="text-muted text-xs">${fmtDate(v.fecha)} ${fmtTime(v.fecha)}</td>
       <td class="text-sm">${v.clienteNombre||'Sin cliente'}</td>
       <td class="text-sm text-muted" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(v.items||[]).map(i=>`${i.nombre} x${i.qty}`).join(', ')}</td>
@@ -3077,9 +2770,7 @@ function renderVentasTable(){
       <td class="text-sm text-muted">${v.metodo||'—'}</td>
       <td class="text-sm text-muted">${v.empleadoNombre||'—'}</td>
       <td><span class="badge ${v.tipo==='servicio'?'badge-blue':'badge-green'}" style="font-size:10.5px">${v.tipo==='servicio'?'Servicio':'Producto'}</span></td>
-      <td>${estadoBadge}</td>
-      <td>${puedeDevolver?`<button class="btn btn-ghost btn-sm cf-devolver-venta" data-cid="${v.id}">↩️ Devolver</button>`:''}</td>
-    </tr>`;}).join('')}</tbody>
+    </tr>`).join('')}</tbody>
   </table>`;
 }
 
@@ -3309,12 +3000,11 @@ function openEmpModal(id=null){
             <input id="e-pass" type="password" placeholder="••••••••"/>
           </div>
           <div class="field"><label>Rol</label>
-            <select id="e-rol" ${S.role!=='admin'?'disabled':''}>
+            <select id="e-rol">
               <option value="empleado"${(!e||e?.rol==='empleado')?' selected':''}>Empleado — Solo POS</option>
               <option value="gerente"${e?.rol==='gerente'?' selected':''}>Gerente — POS + Gestión</option>
-              ${S.role==='admin'?`<option value="admin"${e?.rol==='admin'?' selected':''}>Admin (dueño) — Acceso completo</option>`:''}
+              <option value="admin"${e?.rol==='admin'?' selected':''}>Admin (dueño) — Acceso completo</option>
             </select>
-            ${S.role!=='admin'?'<div style="font-size:11.5px;color:var(--text3);margin-top:4px">Solo el administrador puede cambiar roles</div>':''}
           </div>
         </div>
       </div>
@@ -3343,7 +3033,7 @@ async function saveEmp(id){
   const data = {
     nombre, usuario,
     email:    document.getElementById('e-email').value.trim(),
-    rol:      S.role==='admin' ? document.getElementById('e-rol').value : 'empleado',
+    rol:      document.getElementById('e-rol').value,
     docTipo:  document.getElementById('e-doctype').value,
     docNum:   document.getElementById('e-docnum').value.trim(),
     celularCode: celCode,
@@ -3391,5 +3081,441 @@ async function deleteEmp(id){
       }
     }catch(e){ toast(e.message,'error'); }
   });
+}
+</script>
+<script>
+// ═══════════════════════════════════════════════════════════
+//  PARTE 9 — REPORTES + WHATSAPP + EXPORTAR
+// ═══════════════════════════════════════════════════════════
+
+// ── REPORTES ──
+let reportTab = 'general';
+
+function renderReportes(){
+  const c = document.getElementById('content');
+  c.innerHTML = `
+  <div class="page-header"><h2>📈 Reportes</h2></div>
+  <div style="display:flex;gap:4px;background:var(--card);border-radius:10px;padding:4px;margin-bottom:20px;border:1px solid var(--border)" id="rep-tabs">
+    ${[['general','📊 General'],['empleados','👤 Empleados'],['servicios','💇 Servicios'],['productos','📦 Productos']].map(([k,lbl])=>`
+      <div style="flex:1;padding:8px 4px;text-align:center;font-size:13px;font-weight:600;border-radius:7px;cursor:pointer;transition:all .15s;color:${k===reportTab?'var(--accent)':'var(--text3)'};background:${k===reportTab?'var(--surface)':'transparent'}" onclick="setRepTab('${k}',this)">${lbl}</div>
+    `).join('')}
+  </div>
+  <div id="rep-content"></div>`;
+
+  if(!window.Chart){
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/chart.js';
+    s.onload=()=>{ listen('ventas','ventas',renderRepContent); listen('pagos','pagos',renderRepContent); listen('citas','citas',renderRepContent); listen('empleados','empleados',renderRepContent); renderRepContent(); };
+    document.head.appendChild(s);
+  } else {
+    listen('ventas','ventas',renderRepContent);
+    listen('pagos','pagos',renderRepContent);
+    listen('citas','citas',renderRepContent);
+    listen('empleados','empleados',renderRepContent);
+    renderRepContent();
+  }
+}
+
+function setRepTab(k, el){
+  reportTab = k;
+  document.querySelectorAll('#rep-tabs > div').forEach((d,i)=>{
+    const active = d===el;
+    d.style.color = active?'var(--accent)':'var(--text3)';
+    d.style.background = active?'var(--surface)':'transparent';
+  });
+  renderRepContent();
+}
+
+let repCharts = [];
+function renderRepContent(){
+  repCharts.forEach(ch=>{ try{ch.destroy();}catch(e){} });
+  repCharts = [];
+  const el = document.getElementById('rep-content'); if(!el) return;
+  if(reportTab==='general')    renderRepGeneral(el);
+  else if(reportTab==='empleados') renderRepEmpleados(el);
+  else if(reportTab==='servicios') renderRepServicios(el);
+  else renderRepProductos(el);
+}
+
+function mkChart(id, config){
+  const ctx = document.getElementById(id); if(!ctx||!window.Chart) return;
+  const ch = new Chart(ctx, config);
+  repCharts.push(ch);
+  return ch;
+}
+
+const CHART_OPTS = {
+  bar: (vals,labels,color)=>({type:'bar',data:{labels,datasets:[{data:vals,backgroundColor:color+'33',borderColor:color,borderWidth:2,borderRadius:6}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{ticks:{color:'#5a7a60'},grid:{color:'rgba(255,255,255,.04)'}},x:{ticks:{color:'#5a7a60'},grid:{display:false}}}}}),
+  barH: (vals,labels,color)=>({type:'bar',data:{labels,datasets:[{data:vals,backgroundColor:color+'33',borderColor:color,borderWidth:2,borderRadius:4}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#5a7a60'},grid:{color:'rgba(255,255,255,.04)'}},y:{ticks:{color:'#9db8a2'},grid:{display:false}}}}}),
+  doughnut: (vals,labels,colors)=>({type:'doughnut',data:{labels,datasets:[{data:vals,backgroundColor:colors,borderWidth:2}]},options:{responsive:true,plugins:{legend:{labels:{color:'#9db8a2'}}}}}),
+};
+
+function last6Months(){
+  const today=new Date(); const months=[]; const vals=[];
+  for(let i=5;i>=0;i--){
+    const d=new Date(today.getFullYear(),today.getMonth()-i,1);
+    months.push(d.toLocaleDateString('es-CO',{month:'short',year:'2-digit'}));
+    const s=new Date(d.getFullYear(),d.getMonth(),1);
+    const e=new Date(d.getFullYear(),d.getMonth()+1,1);
+    const t=S.ventas.filter(v=>{const dd=toDate(v.fecha);return dd&&dd>=s&&dd<e;}).reduce((a,v)=>a+(v.total||0),0)
+            +S.pagos.filter(p=>{const dd=toDate(p.fecha);return dd&&dd>=s&&dd<e&&p.estado==='cobrado';}).reduce((a,p)=>a+(p.monto||0),0);
+    vals.push(t);
+  }
+  return {months,vals};
+}
+
+function renderRepGeneral(el){
+  const {months,vals} = last6Months();
+  const servT = S.ventas.filter(v=>v.tipo==='servicio').reduce((a,v)=>a+(v.total||0),0);
+  const prodT = S.ventas.filter(v=>v.tipo!=='servicio').reduce((a,v)=>a+(v.total||0),0);
+
+  // Top 10 mix
+  const mix={};
+  S.ventas.forEach(v=>(v.items||[]).forEach(i=>{
+    const k=i.nombre+'|'+(i.tipo||v.tipo||'producto');
+    if(!mix[k]) mix[k]={nombre:i.nombre,tipo:i.tipo||v.tipo,qty:0};
+    mix[k].qty+=i.qty;
+  }));
+  const topMix=Object.values(mix).sort((a,b)=>b.qty-a.qty).slice(0,10);
+
+  el.innerHTML=`
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px">
+    <div class="card"><h3 style="font-size:13px;color:var(--text2);margin-bottom:12px">Ingresos por mes</h3><canvas id="rch-mes" height="180"></canvas></div>
+    <div class="card"><h3 style="font-size:13px;color:var(--text2);margin-bottom:12px">Servicios vs Productos</h3><canvas id="rch-tipo" height="180"></canvas></div>
+    <div class="card" style="grid-column:1/-1">
+      <h3 style="font-size:13px;color:var(--text2);margin-bottom:4px">🏆 Top 10 más vendidos <span style="font-size:11px;color:var(--text3)">(🔵 Servicio · 🟢 Producto)</span></h3>
+      <canvas id="rch-top" height="130"></canvas>
+    </div>
+  </div>`;
+
+  setTimeout(()=>{
+    mkChart('rch-mes',{...CHART_OPTS.bar(vals,months,'#4ade80'),options:{...CHART_OPTS.bar(vals,months,'#4ade80').options,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmt(ctx.raw)}}}}});
+    mkChart('rch-tipo',CHART_OPTS.doughnut([servT,prodT],['Servicios','Productos'],['rgba(96,165,250,.7)','rgba(74,222,128,.7)']));
+    if(topMix.length) mkChart('rch-top',{type:'bar',data:{labels:topMix.map(x=>x.nombre),datasets:[{data:topMix.map(x=>x.qty),backgroundColor:topMix.map(x=>x.tipo==='servicio'?'rgba(96,165,250,.4)':'rgba(74,222,128,.4)'),borderColor:topMix.map(x=>x.tipo==='servicio'?'#60a5fa':'#4ade80'),borderWidth:2,borderRadius:4}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#5a7a60'},grid:{color:'rgba(255,255,255,.04)'}},y:{ticks:{color:'#9db8a2'},grid:{display:false}}}}});
+  },80);
+}
+
+function renderRepEmpleados(el){
+  const adminUid=S.user?.uid;
+  const adminNombre=S.user?.email?.split('@')[0]||'Admin';
+  const adminV=S.ventas.filter(v=>v.empleadoId===adminUid);
+  const rows=[{nombre:adminNombre+' (admin)',ventas:adminV.length,total:adminV.reduce((a,v)=>a+(v.total||0),0)},...S.empleados.map(e=>{const ev=S.ventas.filter(v=>v.empleadoId===e.id);return{nombre:e.nombre,rol:e.rol,ventas:ev.length,total:ev.reduce((a,v)=>a+(v.total||0),0)};})].sort((a,b)=>b.total-a.total);
+
+  el.innerHTML=`
+  <div class="card mb-4"><h3 style="font-size:13px;color:var(--text2);margin-bottom:12px">Ranking por ingresos</h3><canvas id="rch-emp" height="160"></canvas></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>#</th><th>Empleado</th><th>Ventas</th><th>Total generado</th></tr></thead>
+    <tbody>${rows.map((r,i)=>`<tr>
+      <td>${i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</td>
+      <td style="font-weight:600">${r.nombre}</td>
+      <td>${r.ventas}</td>
+      <td class="text-accent font-bold">${fmt(r.total)}</td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
+
+  setTimeout(()=>{
+    if(rows.length) mkChart('rch-emp',{...CHART_OPTS.bar(rows.map(r=>r.total),rows.map(r=>r.nombre),'#fbbf24'),options:{...CHART_OPTS.bar([],[]).options,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmt(ctx.raw)}}}}});
+  },80);
+}
+
+function renderRepServicios(el){
+  const svcMap={};
+  S.ventas.filter(v=>v.tipo==='servicio').forEach(v=>(v.items||[]).forEach(i=>{
+    if(!svcMap[i.nombre]) svcMap[i.nombre]={qty:0,total:0};
+    svcMap[i.nombre].qty+=i.qty; svcMap[i.nombre].total+=(i.precio||0)*i.qty;
+  }));
+  const sorted=Object.entries(svcMap).sort((a,b)=>b[1].total-a[1].total).slice(0,15);
+  const totalServ=S.ventas.filter(v=>v.tipo==='servicio').reduce((a,v)=>a+(v.total||0),0);
+
+  el.innerHTML=`
+  <div class="stat-grid mb-4">
+    <div class="stat-card"><div class="sc-label">Ingresos por servicios</div><div class="sc-value text-accent">${fmt(totalServ)}</div></div>
+    <div class="stat-card"><div class="sc-label">Citas totales</div><div class="sc-value">${S.citas.length}</div></div>
+    <div class="stat-card"><div class="sc-label">Servicios distintos</div><div class="sc-value">${sorted.length}</div></div>
+  </div>
+  <div class="card mb-4"><h3 style="font-size:13px;color:var(--text2);margin-bottom:12px">Top servicios más vendidos</h3><canvas id="rch-svc" height="180"></canvas></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Servicio</th><th>Unidades</th><th>Ingresos</th></tr></thead>
+    <tbody>${sorted.map(([n,d])=>`<tr><td>${n}</td><td>${d.qty}</td><td class="text-accent font-bold">${fmt(d.total)}</td></tr>`).join('')}
+    ${!sorted.length?'<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:20px">Sin datos de servicios</td></tr>':''}</tbody>
+  </table></div>`;
+
+  setTimeout(()=>{
+    if(sorted.length) mkChart('rch-svc',CHART_OPTS.barH(sorted.map(x=>x[1].total),sorted.map(x=>x[0]),'#60a5fa'));
+  },80);
+}
+
+function renderRepProductos(el){
+  const prodMap={};
+  S.ventas.forEach(v=>(v.items||[]).filter(i=>i.tipo==='producto'||(v.tipo!=='servicio'&&!i.tipo)).forEach(i=>{
+    if(!prodMap[i.nombre]) prodMap[i.nombre]={qty:0,total:0};
+    prodMap[i.nombre].qty+=i.qty; prodMap[i.nombre].total+=(i.precio||0)*i.qty;
+  }));
+  const sorted=Object.entries(prodMap).sort((a,b)=>b[1].total-a[1].total).slice(0,15);
+  const totalProd=S.ventas.filter(v=>v.tipo!=='servicio').reduce((a,v)=>a+(v.total||0),0);
+  const totalUnid=Object.values(prodMap).reduce((a,v)=>a+v.qty,0);
+
+  el.innerHTML=`
+  <div class="stat-grid mb-4">
+    <div class="stat-card"><div class="sc-label">Ingresos por productos</div><div class="sc-value text-accent">${fmt(totalProd)}</div></div>
+    <div class="stat-card"><div class="sc-label">Unidades vendidas</div><div class="sc-value">${totalUnid}</div></div>
+    <div class="stat-card"><div class="sc-label">Productos distintos</div><div class="sc-value">${sorted.length}</div></div>
+  </div>
+  <div class="card mb-4"><h3 style="font-size:13px;color:var(--text2);margin-bottom:12px">Top productos más vendidos</h3><canvas id="rch-prod" height="180"></canvas></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Producto</th><th>Unidades</th><th>Ingresos</th></tr></thead>
+    <tbody>${sorted.map(([n,d])=>`<tr><td>${n}</td><td>${d.qty}</td><td class="text-accent font-bold">${fmt(d.total)}</td></tr>`).join('')}
+    ${!sorted.length?'<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:20px">Sin datos de productos</td></tr>':''}</tbody>
+  </table></div>`;
+
+  setTimeout(()=>{
+    if(sorted.length) mkChart('rch-prod',CHART_OPTS.barH(sorted.map(x=>x[1].total),sorted.map(x=>x[0]),'#4ade80'));
+  },80);
+}
+
+// ── WHATSAPP ──
+const WA_TEMPLATES = {
+  saludo:  {label:'👋 Saludo',        text:'Hola {nombre}, ¿cómo estás? Somos {negocio} y queremos saludarte. ¡Recuerda que siempre estamos aquí para atenderte!'},
+  cita:    {label:'📅 Recordatorio',   text:'Hola {nombre} 👋 Te recordamos que mañana tienes una cita en {negocio}. ¡Te esperamos! Si necesitas reagendar escríbenos.'},
+  cobro:   {label:'💳 Cobro pendiente',text:'Hola {nombre}, tienes un saldo pendiente con {negocio}. Por favor contáctanos para coordinarlo. ¡Gracias!'},
+  cumple:  {label:'🎂 Cumpleaños',     text:'¡Feliz cumpleaños {nombre}! 🎉 Todo el equipo de {negocio} te deseamos un día increíble. ¡Tienes un regalo esperándote!'},
+  promo:   {label:'🎁 Promoción',      text:'Hola {nombre}! 🌟 Tenemos una oferta especial para ti en {negocio}. ¡No te la pierdas! Contáctanos para más info.'},
+  custom:  {label:'✍️ Personalizado',  text:''},
+};
+
+let waTplKey = 'saludo';
+
+function renderWhatsApp(){
+  const c = document.getElementById('content');
+  c.innerHTML = `
+  <div class="page-header"><h2>💬 WhatsApp</h2></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:20px">
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="card">
+        <h3 style="font-size:13px;color:var(--text2);margin-bottom:10px">Plantillas</h3>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          ${Object.entries(WA_TEMPLATES).map(([k,t])=>`
+            <div class="filter-chip${k===waTplKey?' active':''}" style="text-align:left;border-radius:8px;padding:8px 12px" onclick="setWATpl('${k}',this)">${t.label}</div>
+          `).join('')}
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="font-size:13px;color:var(--text2);margin-bottom:10px">Cliente</h3>
+        <select id="wa-cliente" onchange="updateWAPreview()" style="width:100%">
+          <option value="">Seleccionar cliente…</option>
+          ${S.clientes.map(c=>`<option value="${c.id}" data-nombre="${c.nombre}" data-tel="${c.telefono||''}">${c.nombre}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="card" style="display:flex;flex-direction:column;gap:12px">
+      <h3 style="font-size:13px;color:var(--text2)">Vista previa</h3>
+      <textarea id="wa-text" rows="7" style="resize:none;flex:1;background:var(--surface);border-color:var(--border)" placeholder="Selecciona una plantilla…"></textarea>
+      <button class="btn btn-primary btn-full" onclick="sendWA()">💬 Enviar en WhatsApp</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <h3 style="font-size:14px">⏰ Mensajes programados</h3>
+      <button class="btn btn-primary btn-sm" onclick="openProgWA()">+ Programar</button>
+    </div>
+    <p style="font-size:12.5px;color:var(--text3);margin-bottom:12px">Al abrir la app en la fecha programada, se abrirá WhatsApp automáticamente con el mensaje listo.</p>
+    <div id="wa-prog-list"></div>
+  </div>`;
+
+  listen('clientes','clientes',()=>{});
+  setWATpl(waTplKey, document.querySelector(`#content .filter-chip${waTplKey===waTplKey?'.active':''}`));
+  renderWAProg();
+  checkScheduledWA();
+}
+
+function setWATpl(k, el){
+  waTplKey=k;
+  document.querySelectorAll('#content .filter-chip').forEach(c=>c.classList.remove('active'));
+  if(el) el.classList.add('active');
+  const ta = document.getElementById('wa-text'); if(!ta) return;
+  ta.value = WA_TEMPLATES[k]?.text||'';
+  updateWAPreview();
+}
+
+function updateWAPreview(){
+  const sel=document.getElementById('wa-cliente'); if(!sel) return;
+  const nombre=sel.options[sel.selectedIndex]?.dataset.nombre||'{nombre}';
+  const ta=document.getElementById('wa-text'); if(!ta) return;
+  ta.value=(WA_TEMPLATES[waTplKey]?.text||ta.value).replace(/\{nombre\}/g,nombre).replace(/\{negocio\}/g,S.bizName);
+}
+
+function sendWA(){
+  const sel=document.getElementById('wa-cliente');
+  const tel=(sel?.options[sel.selectedIndex]?.dataset.tel||'').replace(/\D/g,'');
+  const text=document.getElementById('wa-text')?.value||'';
+  if(!tel){toast('Selecciona un cliente con teléfono','warn');return;}
+  window.open(`https://wa.me/${tel}?text=${encodeURIComponent(text)}`,'_blank');
+}
+
+function renderWAProg(){
+  const el=document.getElementById('wa-prog-list'); if(!el) return;
+  const lista=JSON.parse(localStorage.getItem('wa_programados')||'[]');
+  if(!lista.length){el.innerHTML='<div class="empty" style="padding:16px"><p>Sin mensajes programados</p></div>';return;}
+  const now=new Date();
+  el.innerHTML=`<div class="table-wrap"><table>
+    <thead><tr><th>Fecha y hora</th><th>Cliente</th><th>Tipo</th><th>Estado</th><th></th></tr></thead>
+    <tbody>${lista.map((m,i)=>{
+      const f=new Date(m.fecha); const pasado=f<now;
+      return `<tr>
+        <td class="text-sm">${f.toLocaleDateString('es-CO',{day:'2-digit',month:'short'})} ${f.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})}</td>
+        <td class="text-sm">${m.clienteNombre||'—'}</td>
+        <td class="text-xs text-muted">${m.templateLabel||'—'}</td>
+        <td><span class="badge ${m.enviado?'badge-green':pasado?'badge-red':'badge-gold'}">${m.enviado?'Enviado':pasado?'Pendiente':'Programado'}</span></td>
+        <td><div style="display:flex;gap:4px">
+          ${!m.enviado?`<button class="btn btn-primary btn-sm" onclick="sendWAProg(${i})">Enviar</button>`:''}
+          <button class="btn btn-danger btn-sm btn-icon" onclick="delWAProg(${i})">🗑</button>
+        </div></td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table></div>`;
+}
+
+function sendWAProg(i){
+  const lista=JSON.parse(localStorage.getItem('wa_programados')||'[]');
+  const m=lista[i]; if(!m) return;
+  window.open(`https://wa.me/${(m.clienteTel||'').replace(/\D/g,'')}?text=${encodeURIComponent(m.mensaje)}`,'_blank');
+  lista[i].enviado=true;
+  localStorage.setItem('wa_programados',JSON.stringify(lista));
+  renderWAProg(); toast('Mensaje enviado a '+m.clienteNombre);
+}
+
+function delWAProg(i){
+  const lista=JSON.parse(localStorage.getItem('wa_programados')||'[]');
+  lista.splice(i,1);
+  localStorage.setItem('wa_programados',JSON.stringify(lista));
+  renderWAProg();
+}
+
+function checkScheduledWA(){
+  const lista=JSON.parse(localStorage.getItem('wa_programados')||'[]');
+  const now=new Date(); let sent=0;
+  lista.forEach((m,i)=>{
+    if(!m.enviado&&new Date(m.fecha)<=now){
+      setTimeout(()=>{
+        window.open(`https://wa.me/${(m.clienteTel||'').replace(/\D/g,'')}?text=${encodeURIComponent(m.mensaje)}`,'_blank');
+        lista[i].enviado=true;
+        localStorage.setItem('wa_programados',JSON.stringify(lista));
+        toast('📲 Recordatorio enviado a '+m.clienteNombre);
+        renderWAProg();
+      },sent*1500);
+      sent++;
+    }
+  });
+}
+
+function openProgWA(){
+  showModal(`
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <div class="modal-header"><h2>⏰ Programar mensaje</h2><button class="modal-close" onclick="closeModal()">✕</button></div>
+      <div class="modal-body">
+        <div class="field"><label>Cliente *</label>
+          <select id="prog-cl">
+            <option value="">Seleccionar…</option>
+            ${S.clientes.map(c=>`<option value="${c.id}" data-nombre="${c.nombre}" data-tel="${c.telefono||''}">${c.nombre}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field"><label>Plantilla *</label>
+          <select id="prog-tpl">${Object.entries(WA_TEMPLATES).filter(([k])=>k!=='custom').map(([k,t])=>`<option value="${k}">${t.label}</option>`).join('')}</select>
+        </div>
+        <div class="form-grid">
+          <div class="field"><label>Fecha *</label><input type="date" id="prog-fecha" value="${new Date().toISOString().slice(0,10)}"/></div>
+          <div class="field"><label>Hora *</label><input type="time" id="prog-hora" value="09:00"/></div>
+        </div>
+        <div class="field"><label>Mensaje personalizado (opcional)</label><textarea id="prog-msg" rows="3" placeholder="Vacío = usar plantilla"></textarea></div>
+        <div style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);border-radius:8px;padding:10px;font-size:12.5px;color:var(--gold)">
+          ⚠️ Al abrir la app en la fecha programada, se abrirá WhatsApp con el mensaje listo para enviar.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveProgWA()">Programar</button>
+      </div>
+    </div>
+  </div>`);
+}
+
+function saveProgWA(){
+  const sel=document.getElementById('prog-cl');
+  const clienteId=sel.value; const clienteNombre=sel.options[sel.selectedIndex]?.dataset.nombre||''; const clienteTel=sel.options[sel.selectedIndex]?.dataset.tel||'';
+  const tplKey=document.getElementById('prog-tpl').value;
+  const fecha=document.getElementById('prog-fecha').value; const hora=document.getElementById('prog-hora').value;
+  const msgCustom=document.getElementById('prog-msg').value.trim();
+  if(!clienteId||!fecha||!hora){toast('Completa todos los campos requeridos','warn');return;}
+  if(!clienteTel){toast('Este cliente no tiene teléfono','warn');return;}
+  const fechaISO=new Date(fecha+'T'+hora).toISOString();
+  const tplText=(WA_TEMPLATES[tplKey]?.text||'').replace(/\{nombre\}/g,clienteNombre).replace(/\{negocio\}/g,S.bizName);
+  const lista=JSON.parse(localStorage.getItem('wa_programados')||'[]');
+  lista.push({clienteId,clienteNombre,clienteTel,templateLabel:WA_TEMPLATES[tplKey]?.label||tplKey,mensaje:msgCustom||tplText,fecha:fechaISO,enviado:false,creado:new Date().toISOString()});
+  localStorage.setItem('wa_programados',JSON.stringify(lista));
+  toast('Mensaje programado ✅'); closeModal(); renderWAProg();
+}
+
+// ── EXPORTAR ──
+function renderExportar(){
+  const c = document.getElementById('content');
+  c.innerHTML = `
+  <div class="page-header"><h2>⬇️ Exportar Datos</h2></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px">
+    ${[
+      ['👥','Clientes CSV','Todos los clientes con etiquetas y deuda','exportClientes'],
+      ['💳','Pagos CSV','Historial completo de cobros','exportPagos'],
+      ['💰','Ventas CSV','Todas las ventas del POS','exportVentas'],
+      ['🏭','Inventario CSV','Stock actual de productos','exportInventario'],
+      ['💾','Backup JSON','Respaldo completo de todos los datos','exportBackup'],
+    ].map(([ic,title,desc,fn])=>`
+      <div class="card" style="cursor:pointer" onclick="${fn}()">
+        <div style="font-size:32px;margin-bottom:10px">${ic}</div>
+        <div style="font-weight:700;font-size:14px;margin-bottom:6px">${title}</div>
+        <div style="font-size:12.5px;color:var(--text3);margin-bottom:14px">${desc}</div>
+        <button class="btn btn-primary btn-sm">Descargar</button>
+      </div>`).join('')}
+  </div>`;
+}
+
+function dlCSV(filename, rows){
+  const csv = rows.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
+  a.download = filename; a.click();
+}
+
+function exportClientes(){
+  const rows=[['Nombre','Teléfono','Email','Cumpleaños','Etiquetas','Deuda','Notas']];
+  S.clientes.forEach(c=>rows.push([c.nombre,c.telefono,c.email,c.cumpleanos,(c.tags||[]).join(';'),c.deuda||0,c.notas]));
+  dlCSV('clientes.csv',rows); toast('Clientes exportados ✅');
+}
+function exportPagos(){
+  const rows=[['Fecha','Cliente','Descripción','Monto','Estado']];
+  S.pagos.forEach(p=>rows.push([fmtDate(p.fecha),p.clienteNombre,p.descripcion,p.monto,p.estado]));
+  dlCSV('pagos.csv',rows); toast('Pagos exportados ✅');
+}
+function exportVentas(){
+  const rows=[['Fecha','Cliente','Items','Total','Método','Empleado','Tipo']];
+  S.ventas.forEach(v=>rows.push([fmtDate(v.fecha),v.clienteNombre,(v.items||[]).map(i=>`${i.nombre}x${i.qty}`).join(';'),v.total,v.metodo,v.empleadoNombre,v.tipo]));
+  dlCSV('ventas.csv',rows); toast('Ventas exportadas ✅');
+}
+function exportInventario(){
+  const rows=[['Nombre','Tipo','Stock','Stock mín','Precio venta','Precio costo','Código']];
+  S.catalogo.forEach(i=>rows.push([i.nombre,i.tipo,i.stock??'',i.stockMin??'',i.precio,i.precioCosto??'',i.codigo??'']));
+  dlCSV('inventario.csv',rows); toast('Inventario exportado ✅');
+}
+function exportBackup(){
+  const data={
+    exportDate:new Date().toISOString(),
+    clientes:S.clientes, ventas:S.ventas, pagos:S.pagos,
+    catalogo:S.catalogo, empleados:S.empleados.map(e=>({...e,password:undefined})),
+    citas:S.citas, invLog:S.invLog
+  };
+  const a=document.createElement('a');
+  a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(data,null,2));
+  a.download=`backup_${new Date().toISOString().slice(0,10)}.json`; a.click();
+  toast('Backup exportado ✅');
 }
 </script>
