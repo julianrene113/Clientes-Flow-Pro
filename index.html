@@ -2061,3 +2061,995 @@ document.addEventListener('click', function(e){
   }
 });
 </script>
+<script>
+// ═══════════════════════════════════════════════════════════
+//  PARTE 5 — CATÁLOGO + INVENTARIO
+// ═══════════════════════════════════════════════════════════
+
+catFilter = 'Todos';
+
+// ── CATÁLOGO ──
+function renderCatalogo(){
+  const c = document.getElementById('content');
+  c.innerHTML = `
+  <div class="page-header">
+    <h2>📦 Catálogo</h2>
+    <button class="btn btn-primary" onclick="openCatModal()">+ Agregar item</button>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+    <input id="cat-search" placeholder="🔍 Buscar…" oninput="renderCatTable()" style="max-width:220px"/>
+    ${['Todos','servicio','producto'].map(t=>`
+      <div class="filter-chip${t===catFilter?' active':''}" onclick="setCatFilter(this,'${t}')">${t==='Todos'?'Todos':t==='servicio'?'Servicios':'Productos'}</div>
+    `).join('')}
+  </div>
+  <div class="table-wrap" id="cat-table"></div>`;
+  listen('catalogo','catalogo', renderCatTable);
+}
+
+function setCatFilter(el, f){
+  catFilter = f;
+  document.querySelectorAll('#content .filter-chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  renderCatTable();
+}
+
+function renderCatTable(){
+  const t = document.getElementById('cat-table'); if(!t) return;
+  const q = (document.getElementById('cat-search')?.value||'').toLowerCase();
+  let list = S.catalogo;
+  if(q) list = list.filter(i=>i.nombre?.toLowerCase().includes(q)||(i.codigo||'').includes(q));
+  if(catFilter!=='Todos') list = list.filter(i=>i.tipo===catFilter);
+
+  if(!list.length){ t.innerHTML='<div class="empty"><div class="empty-icon">📦</div><p>Sin items en el catálogo</p></div>'; return; }
+
+  t.innerHTML = `<table>
+    <thead><tr><th>Item</th><th>Tipo</th><th>Precio venta</th><th>Precio costo</th><th>Stock</th><th>Código</th><th></th></tr></thead>
+    <tbody>${list.map(it=>`<tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:20px">${it.emoji||'📦'}</span>
+          <span style="font-weight:600">${it.nombre}</span>
+        </div>
+      </td>
+      <td><span class="badge ${it.tipo==='servicio'?'badge-blue':'badge-green'}">${it.tipo==='servicio'?'Servicio':'Producto'}</span></td>
+      <td class="text-accent font-bold">${fmt(it.precio)}</td>
+      <td class="text-muted">${it.precioCosto?fmt(it.precioCosto):'—'}</td>
+      <td>${it.tipo==='producto'?`<span style="font-weight:700;color:${(it.stock||0)<=(it.stockMin||5)?'var(--red)':'var(--accent)'}">${it.stock||0}</span>`:'—'}</td>
+      <td class="text-muted text-xs">${it.codigo||'—'}</td>
+      <td>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-ghost btn-sm btn-icon cf-edit-cat" data-cid="${it.id}">✏️</button>
+          <button class="btn btn-danger btn-sm btn-icon cf-del-cat" data-cid="${it.id}">🗑</button>
+        </div>
+      </td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+function openCatModal(id=null){
+  const it = id ? S.catalogo.find(c=>c.id===id) : null;
+  showModal(`
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2>${it?'Editar':'Nuevo'} item</h2>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="field"><label>Tipo *</label>
+            <select id="cat-tipo" onchange="toggleStockFields()">
+              <option value="servicio"${it?.tipo==='servicio'?' selected':''}>Servicio</option>
+              <option value="producto"${it?.tipo==='producto'?' selected':''}>Producto</option>
+            </select>
+          </div>
+          <div class="field"><label>Emoji</label><input id="cat-emoji" value="${it?.emoji||'📦'}" placeholder="📦"/></div>
+          <div class="field" style="grid-column:1/-1"><label>Nombre *</label><input id="cat-nombre" value="${it?.nombre||''}" placeholder="Nombre del item"/></div>
+          <div class="field"><label>Precio de venta *</label><input id="cat-precio" type="number" value="${it?.precio||''}" placeholder="0"/></div>
+          <div class="field"><label>Precio de costo</label><input id="cat-costo" type="number" value="${it?.precioCosto||''}" placeholder="0"/></div>
+        </div>
+        <div id="stock-fields" class="${it?.tipo==='servicio'||!it?'hidden':''}">
+          <div class="form-grid" style="margin-top:4px">
+            <div class="field"><label>Stock inicial</label><input id="cat-stock" type="number" value="${it?.stock||0}"/></div>
+            <div class="field"><label>Stock mínimo (alerta)</label><input id="cat-stockmin" type="number" value="${it?.stockMin||5}"/></div>
+            <div class="field" style="grid-column:1/-1">
+              <label>Código de barras</label>
+              <div style="display:flex;gap:8px">
+                <input id="cat-codigo" value="${it?.codigo||''}" placeholder="7500000000000" style="flex:1"/>
+                <button type="button" class="btn btn-ghost" onclick="openCatScanner()" title="Escanear">📷</button>
+              </div>
+              <div id="cat-scanner-wrap" style="display:none;margin-top:8px;border-radius:8px;overflow:hidden;position:relative">
+                <video id="cat-scan-video" style="width:100%;border-radius:8px;background:#000;display:block" autoplay playsinline></video>
+                <button type="button" onclick="stopCatScan()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);border:none;color:#fff;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:14px">✕</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveCatItem('${id||''}')">Guardar</button>
+      </div>
+    </div>
+  </div>`);
+  // Show stock fields if product
+  if(it?.tipo==='producto') document.getElementById('stock-fields')?.classList.remove('hidden');
+}
+
+function toggleStockFields(){
+  const tipo = document.getElementById('cat-tipo')?.value;
+  document.getElementById('stock-fields')?.classList.toggle('hidden', tipo==='servicio');
+}
+
+async function saveCatItem(id){
+  const nombre = document.getElementById('cat-nombre').value.trim();
+  const precio = parseFloat(document.getElementById('cat-precio').value)||0;
+  if(!nombre||!precio){ toast('Nombre y precio son requeridos','warn'); return; }
+  const tipo = document.getElementById('cat-tipo').value;
+  const data = {
+    nombre, tipo, precio,
+    emoji: document.getElementById('cat-emoji').value||'📦',
+    precioCosto: parseFloat(document.getElementById('cat-costo').value)||0,
+  };
+  if(tipo==='producto'){
+    data.stock    = parseInt(document.getElementById('cat-stock').value)||0;
+    data.stockMin = parseInt(document.getElementById('cat-stockmin').value)||5;
+    data.codigo   = document.getElementById('cat-codigo').value.trim();
+  }
+  try{
+    if(id){ await col('catalogo').doc(id).update(data); toast('Item actualizado'); }
+    else{ data.creado=tsNow(); await col('catalogo').add(data); toast('Item creado ✅'); }
+    closeModal();
+  }catch(e){ toast(e.message,'error'); }
+}
+
+async function deleteCatItem(id){
+  if(!id){ toast('ID inválido','error'); return; }
+  confirmDialog('¿Eliminar este item del catálogo?', async()=>{
+    const ok = await safeDelete('catalogo', id);
+    if(ok) toast('Item eliminado');
+  });
+}
+
+// Catalog barcode scanner
+catScanStream=null, catScanInterval=null;
+function openCatScanner(){
+  if(!('BarcodeDetector' in window)){ toast('Escáner no disponible en este navegador','warn'); return; }
+  const wrap = document.getElementById('cat-scanner-wrap');
+  if(wrap) wrap.style.display='block';
+  startCatScan();
+}
+async function startCatScan(){
+  try{
+    catScanStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+    const v = document.getElementById('cat-scan-video');
+    if(v) v.srcObject = catScanStream;
+    const det = new BarcodeDetector({formats:['ean_13','ean_8','code_128','upc_a','qr_code']});
+    catScanInterval = setInterval(async()=>{
+      const vid = document.getElementById('cat-scan-video'); if(!vid){ stopCatScan(); return; }
+      try{
+        const codes = await det.detect(vid);
+        if(codes.length){
+          const code = codes[0].rawValue;
+          stopCatScan();
+          const input = document.getElementById('cat-codigo');
+          if(input){ input.value=code; input.focus(); }
+          toast('Código detectado: '+code);
+        }
+      }catch(e){}
+    },300);
+  }catch(e){ toast('Error de cámara: '+e.message,'error'); stopCatScan(); }
+}
+function stopCatScan(){
+  clearInterval(catScanInterval);
+  if(catScanStream) catScanStream.getTracks().forEach(t=>t.stop());
+  catScanStream=null;
+  const wrap = document.getElementById('cat-scanner-wrap');
+  if(wrap) wrap.style.display='none';
+}
+
+// ── INVENTARIO ──
+function renderInventario(){
+  const c = document.getElementById('content');
+  c.innerHTML = `
+  <div class="page-header"><h2>🏭 Inventario</h2></div>
+  <div class="table-wrap mb-4" id="inv-table"></div>
+  <div class="card">
+    <h3 style="font-size:14px;margin-bottom:12px">📋 Historial de movimientos</h3>
+    <div id="inv-log"></div>
+  </div>`;
+  listen('catalogo','catalogo', renderInvTable);
+  listen('invLog','invLog', renderInvLog);
+}
+
+function renderInvTable(){
+  const t = document.getElementById('inv-table'); if(!t) return;
+  const prods = S.catalogo.filter(p=>p.tipo==='producto');
+  if(!prods.length){ t.innerHTML='<div class="empty"><div class="empty-icon">🏭</div><p>Sin productos en inventario</p></div>'; return; }
+  t.innerHTML = `<table>
+    <thead><tr><th>Producto</th><th>Stock actual</th><th>Stock mín.</th><th>Estado</th><th>Ajustar</th></tr></thead>
+    <tbody>${prods.map(p=>{
+      const pct = p.stockMin ? Math.min(100,(p.stock||0)/Math.max((p.stockMin||5)*2,1)*100) : 50;
+      const color = (p.stock||0)===0?'var(--red)':(p.stock||0)<=(p.stockMin||5)?'var(--gold)':'var(--accent)';
+      const label = (p.stock||0)===0?'Sin stock':(p.stock||0)<=(p.stockMin||5)?'Stock bajo':'OK';
+      return `<tr>
+        <td>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:18px">${p.emoji||'📦'}</span>
+            <div><div style="font-weight:600">${p.nombre}</div><div style="font-size:11px;color:var(--text3)">${p.codigo||''}</div></div>
+          </div>
+        </td>
+        <td><span style="font-family:Syne,sans-serif;font-size:18px;font-weight:700;color:${color}">${p.stock||0}</span></td>
+        <td class="text-muted">${p.stockMin||5}</td>
+        <td>
+          <div style="min-width:90px">
+            <span style="font-size:11.5px;color:${color};font-weight:600">${label}</span>
+            <div style="height:6px;border-radius:3px;background:var(--surface);overflow:hidden;margin-top:4px">
+              <div style="height:100%;width:${pct}%;background:${color};border-radius:3px;transition:width .3s"></div>
+            </div>
+          </div>
+        </td>
+        <td>
+          <div style="display:flex;gap:4px;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm cf-stock-adj" data-pid="${p.id}" data-nombre="${p.nombre}" data-stock="${p.stock||0}" data-tipo="entrada">+ Entrada</button>
+            <button class="btn btn-ghost btn-sm cf-stock-adj" data-pid="${p.id}" data-nombre="${p.nombre}" data-stock="${p.stock||0}" data-tipo="salida">− Salida</button>
+            <button class="btn btn-ghost btn-sm cf-stock-adj" data-pid="${p.id}" data-nombre="${p.nombre}" data-stock="${p.stock||0}" data-tipo="corrección">= Corregir</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
+
+function renderInvLog(){
+  const el = document.getElementById('inv-log'); if(!el) return;
+  const log = [...S.invLog].sort((a,b)=>(b.fecha?.seconds||0)-(a.fecha?.seconds||0));
+  if(!log.length){ el.innerHTML='<div class="empty" style="padding:16px"><p>Sin movimientos registrados</p></div>'; return; }
+  el.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>Fecha</th><th>Producto</th><th>Tipo</th><th>Cambio</th><th>Antes → Después</th><th>Motivo</th></tr></thead>
+    <tbody>${log.slice(0,50).map(m=>`<tr>
+      <td class="text-muted text-xs">${fmtDate(m.fecha)} ${fmtTime(m.fecha)}</td>
+      <td class="text-sm">${m.nombre||'—'}</td>
+      <td><span class="badge ${m.tipo==='entrada'?'badge-green':m.tipo==='salida'?'badge-red':'badge-gold'}">${m.tipo}</span></td>
+      <td style="font-weight:700;color:${m.tipo==='entrada'?'var(--accent)':m.tipo==='salida'?'var(--red)':'var(--gold)'}">${m.tipo==='entrada'?'+':m.tipo==='salida'?'-':'='}${m.cantidad}</td>
+      <td class="text-xs">${m.stockAntes!==undefined?`<span style="color:var(--text3)">${m.stockAntes}</span> → <span style="font-weight:700;color:var(--accent)">${m.stockDespues}</span>`:'—'}</td>
+      <td class="text-muted text-sm">${m.motivo||'—'}</td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+function openStockAdj(pid, nombre, currentStock, tipo){
+  if(!pid){ toast('ID inválido','error'); return; }
+  showModal(`
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="max-width:380px">
+      <div class="modal-header"><h2>Ajuste de stock</h2><button class="modal-close" onclick="closeModal()">✕</button></div>
+      <div class="modal-body">
+        <p style="color:var(--text2);font-size:13.5px;margin-bottom:4px"><strong>${nombre}</strong></p>
+        <p style="color:var(--text3);font-size:13px;margin-bottom:4px">Stock actual: <strong style="color:var(--accent)">${currentStock}</strong></p>
+        <div class="field"><label>Tipo de movimiento</label>
+          <select id="adj-tipo">
+            <option value="entrada"${tipo==='entrada'?' selected':''}>+ Entrada</option>
+            <option value="salida"${tipo==='salida'?' selected':''}>− Salida</option>
+            <option value="corrección"${tipo==='corrección'?' selected':''}>= Corrección directa</option>
+          </select>
+        </div>
+        <div class="field"><label>Cantidad</label><input id="adj-qty" type="number" value="1" min="0"/></div>
+        <div class="field"><label>Motivo</label><input id="adj-motivo" placeholder="Ej: Compra a proveedor, daño…"/></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveStockAdj('${pid}',${currentStock})">Aplicar</button>
+      </div>
+    </div>
+  </div>`);
+}
+
+async function saveStockAdj(pid, currentStock){
+  const tipo   = document.getElementById('adj-tipo').value;
+  const qty    = parseInt(document.getElementById('adj-qty').value)||0;
+  const motivo = document.getElementById('adj-motivo').value.trim();
+  let newStock;
+  if(tipo==='entrada')      newStock = currentStock + qty;
+  else if(tipo==='salida')  newStock = Math.max(0, currentStock - qty);
+  else                      newStock = qty; // corrección directa
+  const batch = db.batch();
+  batch.update(col('catalogo').doc(pid),{stock: newStock});
+  const logRef = col('invLog').doc();
+  batch.set(logRef,{
+    productoId:pid, nombre: S.catalogo.find(c=>c.id===pid)?.nombre||'',
+    tipo, cantidad:qty, motivo, fecha:tsNow(),
+    stockAntes:currentStock, stockDespues:newStock
+  });
+  try{ await batch.commit(); toast('Stock actualizado ✅'); closeModal(); }
+  catch(e){ toast(e.message,'error'); }
+}
+
+// ── DELEGATED EVENT LISTENER (handles all cf- buttons) ──
+document.addEventListener('click', function(e){
+  const el = e.target.closest('[class*="cf-"]');
+  if(!el) return;
+  const cls = el.className || '';
+
+  // Catalog
+  if(cls.includes('cf-edit-cat')){
+    const id = el.dataset.cid;
+    if(id) openCatModal(id);
+  }
+  else if(cls.includes('cf-del-cat')){
+    const id = el.dataset.cid;
+    if(id) deleteCatItem(id);
+  }
+  // Stock adj
+  else if(cls.includes('cf-stock-adj')){
+    openStockAdj(el.dataset.pid, el.dataset.nombre, parseInt(el.dataset.stock||0), el.dataset.tipo||'entrada');
+  }
+  // Client edit/delete (from cards)
+  else if(cls.includes('cf-edit-cl')){
+    const id = el.dataset.cid;
+    if(id) openClientModal(id);
+  }
+  else if(cls.includes('cf-del-cl')){
+    const id = el.dataset.cid;
+    if(id) deleteClient(id);
+  }
+  // Empleados (Part 8)
+  else if(cls.includes('cf-edit-emp')){
+    const id = el.dataset.cid;
+    if(id && typeof openEmpModal==='function') openEmpModal(id);
+  }
+  else if(cls.includes('cf-del-emp')){
+    const id = el.dataset.cid;
+    if(id && typeof deleteEmp==='function') deleteEmp(id);
+  }
+  // Citas (Part 6)
+  else if(cls.includes('cf-edit-cita')){
+    const id = el.dataset.cid;
+    if(id && typeof editCita==='function') editCita(id);
+  }
+  else if(cls.includes('cf-del-cita')){
+    const id = el.dataset.cid;
+    if(id && typeof deleteCita==='function') deleteCita(id);
+  }
+  // Pagos (Part 7)
+  else if(cls.includes('cf-cobrar-pago')){
+    if(typeof markPagoCobrado==='function')
+      markPagoCobrado(el.dataset.pid, el.dataset.cid||'', parseFloat(el.dataset.monto||0));
+  }
+  else if(cls.includes('cf-del-pago')){
+    if(typeof deletePago==='function')
+      deletePago(el.dataset.pid, el.dataset.cid||'', parseFloat(el.dataset.monto||0));
+  }
+  // Ventas delete (Part 7)
+  else if(cls.includes('cf-del-venta')){
+    const id = el.dataset.cid;
+    if(id && typeof deleteVenta==='function') deleteVenta(id);
+  }
+});
+</script>
+<script>
+// ═══════════════════════════════════════════════════════════
+//  PARTE 6 — AGENDA
+// ═══════════════════════════════════════════════════════════
+
+let calDate = new Date();
+let selectedDay = null;
+
+function renderAgenda(){
+  const c = document.getElementById('content');
+  c.innerHTML = `
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+    <button class="btn btn-ghost btn-icon" onclick="moveMonth(-1)">‹</button>
+    <h2 id="cal-label" style="font-family:Syne,sans-serif;font-size:18px;font-weight:700;flex:1;text-align:center"></h2>
+    <button class="btn btn-ghost btn-icon" onclick="moveMonth(1)">›</button>
+    <button class="btn btn-primary" onclick="openCitaModal()">+ Nueva cita</button>
+  </div>
+  <div id="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:16px"></div>
+  <div id="day-detail" style="display:none"></div>`;
+
+  if(!document.getElementById('cal-style')){
+    const s = document.createElement('style');
+    s.id = 'cal-style';
+    s.textContent = `
+    .cal-day-lbl{text-align:center;font-size:11px;color:var(--text3);font-weight:600;padding:4px 0}
+    .cal-day{min-height:70px;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:5px;cursor:pointer;transition:border .15s}
+    .cal-day:hover{border-color:var(--text3)}
+    .cal-day.today{border-color:var(--accent)}
+    .cal-day.other-month{opacity:.3}
+    .cal-day.selected{border-color:var(--gold);background:rgba(251,191,36,.05)}
+    .cal-day .day-num{font-size:12px;font-weight:700;margin-bottom:3px}
+    .cal-day.today .day-num{color:var(--accent)}
+    .cal-evt{font-size:9.5px;padding:1px 4px;border-radius:3px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    @media(max-width:768px){.cal-day{min-height:48px}.cal-evt{display:none}}`;
+    document.head.appendChild(s);
+  }
+
+  listen('citas','citas', buildCalendar);
+  listen('clientes','clientes', ()=>{});
+  buildCalendar();
+}
+
+function moveMonth(d){
+  calDate = new Date(calDate.getFullYear(), calDate.getMonth()+d, 1);
+  buildCalendar();
+}
+
+function buildCalendar(){
+  const lbl = document.getElementById('cal-label');
+  const grid = document.getElementById('cal-grid');
+  if(!lbl||!grid) return;
+
+  lbl.textContent = calDate.toLocaleDateString('es-CO',{month:'long',year:'numeric'}).replace(/^\w/,c=>c.toUpperCase());
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  const first = new Date(calDate.getFullYear(), calDate.getMonth(), 1);
+  const last  = new Date(calDate.getFullYear(), calDate.getMonth()+1, 0);
+  const days  = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+
+  let html = days.map(d=>`<div class="cal-day-lbl">${d}</div>`).join('');
+
+  // Padding before first day
+  for(let i=0; i<first.getDay(); i++) html+=`<div class="cal-day other-month"></div>`;
+
+  for(let i=1; i<=last.getDate(); i++){
+    const date = new Date(calDate.getFullYear(), calDate.getMonth(), i);
+    const isToday = isSameDay(date, today);
+    const isSel   = selectedDay && isSameDay(date, selectedDay);
+    const dayCitas = S.citas.filter(c=>{ const d=toDate(c.fecha); return d&&isSameDay(d,date); });
+
+    html += `<div class="cal-day${isToday?' today':''}${isSel?' selected':''}" onclick="selectDay(new Date(${date.getTime()}))">
+      <div class="day-num">${i}</div>
+      ${dayCitas.slice(0,3).map(c=>`
+        <div class="cal-evt" style="background:${c.estado==='confirmado'?'rgba(74,222,128,.2)':c.estado==='cancelado'?'rgba(248,113,113,.2)':'rgba(251,191,36,.2)'};color:${c.estado==='confirmado'?'var(--accent)':c.estado==='cancelado'?'var(--red)':'var(--gold)'}">
+          ${c.cliente||'Cita'}
+        </div>`).join('')}
+      ${dayCitas.length>3?`<div style="font-size:9px;color:var(--text3)">+${dayCitas.length-3}</div>`:''}
+    </div>`;
+  }
+
+  grid.innerHTML = html;
+  if(selectedDay) showDayDetail(selectedDay);
+}
+
+function selectDay(date){
+  selectedDay = date;
+  buildCalendar();
+}
+
+function showDayDetail(date){
+  const det = document.getElementById('day-detail'); if(!det) return;
+  det.style.display = 'block';
+  const dayCitas = S.citas.filter(c=>{ const d=toDate(c.fecha); return d&&isSameDay(d,date); })
+    .sort((a,b)=>(a.fecha?.seconds||0)-(b.fecha?.seconds||0));
+
+  const dateStr = date.toLocaleDateString('es-CO',{weekday:'long',day:'numeric',month:'long'});
+
+  det.innerHTML = `
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <h3 style="font-size:14px;font-weight:700">${dateStr} <span style="color:var(--text3);font-weight:400">(${dayCitas.length} citas)</span></h3>
+      <button class="btn btn-primary btn-sm" onclick="openCitaModal('${date.toISOString()}')">+ Cita</button>
+    </div>
+    ${!dayCitas.length
+      ? '<div class="empty" style="padding:16px"><p>Sin citas este día</p></div>'
+      : dayCitas.map(ci=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--surface);border-radius:8px;margin-bottom:6px;flex-wrap:wrap;gap:8px">
+        <span style="font-size:20px;flex-shrink:0">📅</span>
+        <div style="flex:1;min-width:120px">
+          <div style="font-weight:600;font-size:14px">${ci.cliente||'Sin nombre'}</div>
+          <div style="font-size:12px;color:var(--text3)">${ci.servicio||'—'} · ${fmtTime(ci.fecha)}</div>
+          ${ci.notas?`<div style="font-size:11.5px;color:var(--text3);margin-top:2px">${ci.notas}</div>`:''}
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <select class="badge" style="background:transparent;border:1px solid var(--border);border-radius:6px;font-size:11px;cursor:pointer;padding:3px 6px" onchange="updateCitaEstado('${ci.id}',this.value)">
+            ${['pendiente','confirmado','completado','cancelado'].map(s=>`<option value="${s}"${ci.estado===s?' selected':''}>${s}</option>`).join('')}
+          </select>
+          <button class="btn btn-ghost btn-sm btn-icon cf-edit-cita" data-cid="${ci.id}">✏️</button>
+          <button class="btn btn-danger btn-sm btn-icon cf-del-cita" data-cid="${ci.id}">🗑</button>
+        </div>
+      </div>`).join('')}
+  </div>`;
+}
+
+// ── CITA MODAL ──
+function openCitaModal(dateIso=null, editId=null){
+  const ci = editId ? S.citas.find(c=>c.id===editId) : null;
+  let dateVal = new Date().toISOString().slice(0,10);
+  let timeVal = '10:00';
+  if(dateIso && !editId){
+    const d = new Date(dateIso);
+    dateVal = d.toISOString().slice(0,10);
+  }
+  if(ci){
+    const d = toDate(ci.fecha);
+    if(d){ dateVal=d.toISOString().slice(0,10); timeVal=d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); }
+  }
+
+  showModal(`
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>${ci?'Editar':'Nueva'} cita</h2>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="field"><label>Cliente</label>
+            <select id="cita-cl">
+              <option value="">Sin cliente</option>
+              ${S.clientes.map(c=>`<option value="${c.id}" data-nombre="${c.nombre}" data-tel="${c.telefono||''}" ${c.id===(ci?.clienteId||'')?' selected':''}>${c.nombre}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field"><label>Servicio</label>
+            <input id="cita-serv" value="${ci?.servicio||''}" placeholder="Corte, manicure…"/>
+          </div>
+          <div class="field"><label>Fecha *</label><input type="date" id="cita-fecha" value="${dateVal}"/></div>
+          <div class="field"><label>Hora *</label><input type="time" id="cita-hora" value="${timeVal}"/></div>
+        </div>
+        <div class="field"><label>Notas</label><textarea id="cita-notas" rows="2" placeholder="Observaciones…">${ci?.notas||''}</textarea></div>
+        <div class="field"><label>Estado</label>
+          <select id="cita-estado">
+            ${['pendiente','confirmado','completado','cancelado'].map(s=>`<option value="${s}"${(ci?.estado||'pendiente')===s?' selected':''}>${s}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveCita('${editId||''}')">Guardar cita</button>
+      </div>
+    </div>
+  </div>`);
+}
+
+async function saveCita(editId=''){
+  const fecha = document.getElementById('cita-fecha').value;
+  const hora  = document.getElementById('cita-hora').value;
+  if(!fecha||!hora){ toast('Fecha y hora son requeridas','warn'); return; }
+  const sel  = document.getElementById('cita-cl');
+  const clienteId    = sel.value||null;
+  const clienteNombre= sel.options[sel.selectedIndex]?.dataset.nombre||'';
+  const clienteTel   = sel.options[sel.selectedIndex]?.dataset.tel||'';
+  const fechaDate    = new Date(`${fecha}T${hora}`);
+  const data = {
+    fecha: tsFrom(fechaDate),
+    servicio:  document.getElementById('cita-serv').value.trim(),
+    clienteId, cliente: clienteNombre,
+    notas:  document.getElementById('cita-notas').value.trim(),
+    estado: document.getElementById('cita-estado').value
+  };
+
+  try{
+    if(editId){
+      await col('citas').doc(editId).update(data);
+      toast('Cita actualizada ✅');
+    } else {
+      await col('citas').add(data);
+      // Auto WhatsApp reminders if client has phone
+      if(clienteTel){
+        const prog = JSON.parse(localStorage.getItem('wa_programados')||'[]');
+        const servStr = data.servicio||'tu cita';
+        const horaStr = fechaDate.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
+        const fechaStr = fechaDate.toLocaleDateString('es-CO',{weekday:'long',day:'numeric',month:'long'});
+        const now = new Date();
+        const unDiaAntes = new Date(fechaDate); unDiaAntes.setDate(unDiaAntes.getDate()-1); unDiaAntes.setHours(9,0,0,0);
+        const dosHorasAntes = new Date(fechaDate.getTime()-2*60*60*1000);
+        if(unDiaAntes>now) prog.push({clienteId,clienteNombre,clienteTel,templateLabel:'📅 Recordatorio (1 día antes)',mensaje:`Hola ${clienteNombre} 👋 Mañana tienes cita en ${S.bizName}: *${servStr}* a las ${horaStr}. ¡Te esperamos!`,fecha:unDiaAntes.toISOString(),enviado:false,auto:true,creado:now.toISOString()});
+        if(dosHorasAntes>now) prog.push({clienteId,clienteNombre,clienteTel,templateLabel:'⏰ Recordatorio (2h antes)',mensaje:`Hola ${clienteNombre} ⏰ En 2 horas tienes tu cita de *${servStr}* en ${S.bizName}. ¡Nos vemos!`,fecha:dosHorasAntes.toISOString(),enviado:false,auto:true,creado:now.toISOString()});
+        localStorage.setItem('wa_programados',JSON.stringify(prog));
+        const n = [unDiaAntes,dosHorasAntes].filter(d=>d>now).length;
+        toast(`Cita agendada${n>0?' + '+n+' recordatorio'+(n>1?'s':'')+' WhatsApp':''} ✅`);
+      } else {
+        toast('Cita agendada ✅');
+      }
+    }
+    closeModal();
+    buildCalendar();
+    if(selectedDay) showDayDetail(selectedDay);
+  }catch(e){ toast(e.message,'error'); }
+}
+
+async function updateCitaEstado(id, estado){
+  if(!id){ toast('ID inválido','error'); return; }
+  try{ await col('citas').doc(id).update({estado}); toast('Estado actualizado'); }
+  catch(e){ toast(e.message,'error'); }
+}
+
+function editCita(id){
+  if(!id){ toast('ID inválido','error'); return; }
+  openCitaModal(null, id);
+}
+
+async function deleteCita(id){
+  if(!id){ toast('ID inválido','error'); return; }
+  confirmDialog('¿Eliminar esta cita?', async()=>{
+    const ok = await safeDelete('citas', id);
+    if(ok){
+      toast('Cita eliminada');
+      buildCalendar();
+      if(selectedDay) showDayDetail(selectedDay);
+    }
+  });
+}
+</script>
+<script>
+// ═══════════════════════════════════════════════════════════
+//  PARTE 7 — VENTAS + PAGOS
+// ═══════════════════════════════════════════════════════════
+
+// ── VENTAS ──
+function renderVentas(){
+  const c = document.getElementById('content');
+  c.innerHTML = `
+  <div class="page-header"><h2>💰 Historial de Ventas</h2></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+    <div class="field" style="margin:0"><input type="date" id="v-desde" onchange="renderVentasTable()" style="width:auto"/></div>
+    <div class="field" style="margin:0"><input type="date" id="v-hasta" onchange="renderVentasTable()" style="width:auto"/></div>
+    <select id="v-emp" onchange="renderVentasTable()" style="width:auto;min-width:160px">
+      <option value="">Todos los empleados</option>
+    </select>
+    <select id="v-tipo" onchange="renderVentasTable()" style="width:auto">
+      <option value="">Todos</option>
+      <option value="servicio">Servicios</option>
+      <option value="producto">Productos</option>
+    </select>
+  </div>
+  <div class="stat-grid mb-4" id="v-stats"></div>
+  <div class="table-wrap" id="v-table"></div>`;
+
+  listen('ventas','ventas', ()=>{ fillEmpFilter(); renderVentasTable(); });
+  listen('empleados','empleados', fillEmpFilter);
+}
+
+function fillEmpFilter(){
+  const sel = document.getElementById('v-emp'); if(!sel) return;
+  const adminOpt = S.user ? `<option value="${S.user.uid}">${S.user.email?.split('@')[0]||'Admin'} (admin)</option>` : '';
+  sel.innerHTML = `<option value="">Todos los empleados</option>${adminOpt}`
+    + S.empleados.map(e=>`<option value="${e.id}">${e.nombre}</option>`).join('');
+}
+
+function renderVentasTable(){
+  const desde = document.getElementById('v-desde')?.value;
+  const hasta = document.getElementById('v-hasta')?.value;
+  const empId = document.getElementById('v-emp')?.value;
+  const tipo  = document.getElementById('v-tipo')?.value;
+
+  let list = [...S.ventas].sort((a,b)=>(b.fecha?.seconds||0)-(a.fecha?.seconds||0));
+  if(desde) list = list.filter(v=>{ const d=toDate(v.fecha); return d&&d>=new Date(desde); });
+  if(hasta) list = list.filter(v=>{ const d=toDate(v.fecha); return d&&d<=new Date(hasta+'T23:59:59'); });
+  if(empId) list = list.filter(v=>v.empleadoId===empId);
+  if(tipo)  list = list.filter(v=>v.tipo===tipo);
+
+  const total = list.reduce((a,v)=>a+(v.total||0),0);
+  const servs = list.filter(v=>v.tipo==='servicio').reduce((a,v)=>a+(v.total||0),0);
+  const prods = list.filter(v=>v.tipo!=='servicio').reduce((a,v)=>a+(v.total||0),0);
+
+  const st = document.getElementById('v-stats');
+  if(st) st.innerHTML = `
+    <div class="stat-card"><div class="sc-label">Total ventas</div><div class="sc-value text-accent">${fmt(total)}</div><div class="sc-sub">${list.length} transacciones</div></div>
+    <div class="stat-card"><div class="sc-label">Servicios</div><div class="sc-value">${fmt(servs)}</div></div>
+    <div class="stat-card"><div class="sc-label">Productos</div><div class="sc-value">${fmt(prods)}</div></div>`;
+
+  const t = document.getElementById('v-table'); if(!t) return;
+  if(!list.length){ t.innerHTML='<div class="empty"><div class="empty-icon">💰</div><p>Sin ventas en el período</p></div>'; return; }
+
+  t.innerHTML = `<table>
+    <thead><tr><th>Fecha</th><th>Cliente</th><th>Items</th><th>Total</th><th>Método</th><th>Empleado</th><th>Tipo</th></tr></thead>
+    <tbody>${list.slice(0,100).map(v=>`<tr>
+      <td class="text-muted text-xs">${fmtDate(v.fecha)} ${fmtTime(v.fecha)}</td>
+      <td class="text-sm">${v.clienteNombre||'Sin cliente'}</td>
+      <td class="text-sm text-muted" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(v.items||[]).map(i=>`${i.nombre} x${i.qty}`).join(', ')}</td>
+      <td class="text-accent font-bold">${fmt(v.total)}</td>
+      <td class="text-sm text-muted">${v.metodo||'—'}</td>
+      <td class="text-sm text-muted">${v.empleadoNombre||'—'}</td>
+      <td><span class="badge ${v.tipo==='servicio'?'badge-blue':'badge-green'}" style="font-size:10.5px">${v.tipo==='servicio'?'Servicio':'Producto'}</span></td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+// ── PAGOS ──
+let pagoFilter = 'Todos';
+
+function renderPagos(){
+  const c = document.getElementById('content');
+  c.innerHTML = `
+  <div class="page-header">
+    <h2>💳 Pagos & Cobros</h2>
+    <button class="btn btn-primary" onclick="openPagoModal()">+ Nuevo cobro</button>
+  </div>
+  <div class="stat-grid mb-4" id="p-stats"></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+    ${['Todos','pendiente','cobrado'].map(s=>`
+      <div class="filter-chip${s===pagoFilter?' active':''}" onclick="setPagoFilter(this,'${s}')">${s==='Todos'?'Todos':s==='pendiente'?'Pendientes':'Cobrados'}</div>
+    `).join('')}
+  </div>
+  <div class="table-wrap" id="p-table"></div>`;
+
+  listen('pagos','pagos', ()=>{ renderPagosStats(); renderPagosTable(); });
+  listen('clientes','clientes', ()=>{});
+}
+
+function setPagoFilter(el, f){
+  pagoFilter = f;
+  document.querySelectorAll('#content .filter-chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  renderPagosTable();
+}
+
+function renderPagosStats(){
+  const cobrado  = S.pagos.filter(p=>p.estado==='cobrado').reduce((a,p)=>a+(p.monto||0),0);
+  const pendiente= S.pagos.filter(p=>p.estado==='pendiente'||!p.estado).reduce((a,p)=>a+(p.monto||0),0);
+  const total    = cobrado + pendiente;
+  const pct      = total>0 ? Math.round(cobrado/total*100) : 0;
+  const st = document.getElementById('p-stats'); if(!st) return;
+  st.innerHTML = `
+    <div class="stat-card"><div class="sc-label">Total facturado</div><div class="sc-value">${fmt(total)}</div></div>
+    <div class="stat-card"><div class="sc-label">Cobrado</div><div class="sc-value text-accent">${fmt(cobrado)}</div></div>
+    <div class="stat-card"><div class="sc-label">Pendiente</div><div class="sc-value text-red">${fmt(pendiente)}</div><div class="sc-sub">${S.pagos.filter(p=>p.estado==='pendiente'||!p.estado).length} cobros</div></div>
+    <div class="stat-card"><div class="sc-label">% Cobrado</div><div class="sc-value">${pct}%</div>
+      <div style="height:6px;background:var(--surface);border-radius:3px;margin-top:6px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--accent);border-radius:3px;transition:width .3s"></div></div>
+    </div>`;
+}
+
+function renderPagosTable(){
+  const t = document.getElementById('p-table'); if(!t) return;
+  let list = [...S.pagos].sort((a,b)=>(b.fecha?.seconds||0)-(a.fecha?.seconds||0));
+  if(pagoFilter!=='Todos') list = list.filter(p=>p.estado===pagoFilter||(pagoFilter==='pendiente'&&!p.estado));
+
+  if(!list.length){ t.innerHTML='<div class="empty"><div class="empty-icon">💳</div><p>Sin cobros registrados</p></div>'; return; }
+
+  t.innerHTML = `<table>
+    <thead><tr><th>Fecha</th><th>Cliente</th><th>Descripción</th><th>Monto</th><th>Estado</th><th></th></tr></thead>
+    <tbody>${list.map(p=>{
+      const isPend = p.estado==='pendiente'||!p.estado;
+      const cid = (p.clienteId&&p.clienteId!=='null'&&p.clienteId!=='undefined') ? p.clienteId : '';
+      return `<tr>
+        <td class="text-xs text-muted">${fmtDate(p.fecha)}</td>
+        <td class="text-sm">${p.clienteNombre||'—'}</td>
+        <td class="text-sm">${p.descripcion||'—'}</td>
+        <td class="font-bold">${fmt(p.monto)}</td>
+        <td><span class="badge ${p.estado==='cobrado'?'badge-green':'badge-red'}">${p.estado||'pendiente'}</span></td>
+        <td>
+          <div style="display:flex;gap:4px">
+            ${isPend?`<button class="btn btn-primary btn-sm cf-cobrar-pago" data-pid="${p.id}" data-cid="${cid}" data-monto="${p.monto||0}">Cobrar</button>`:''}
+            <button class="btn btn-danger btn-sm btn-icon cf-del-pago" data-pid="${p.id}" data-cid="${cid}" data-monto="${isPend?0:p.monto||0}">🗑</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
+
+async function markPagoCobrado(pid, cid, monto){
+  if(!pid){ toast('ID inválido','error'); return; }
+  try{
+    const batch = db.batch();
+    batch.update(col('pagos').doc(pid),{estado:'cobrado'});
+    if(cid && cid!=='null' && cid.trim()!==''){
+      batch.update(col('clientes').doc(cid),{deuda: firebase.firestore.FieldValue.increment(-monto)});
+    }
+    await batch.commit();
+    toast('Cobro marcado como pagado ✅');
+  }catch(e){ toast(e.message,'error'); }
+}
+
+async function deletePago(pid, cid, monto){
+  if(!pid){ toast('ID inválido','error'); return; }
+  confirmDialog('¿Eliminar este cobro?', async()=>{
+    try{
+      const batch = db.batch();
+      batch.delete(col('pagos').doc(pid));
+      if(cid && cid!=='null' && cid.trim()!=='' && monto>0){
+        batch.update(col('clientes').doc(cid),{deuda: firebase.firestore.FieldValue.increment(-monto)});
+      }
+      await batch.commit();
+      toast('Cobro eliminado');
+    }catch(e){ toast(e.message,'error'); }
+  });
+}
+</script>
+<script>
+// ═══════════════════════════════════════════════════════════
+//  PARTE 8 — EMPLEADOS
+// ═══════════════════════════════════════════════════════════
+
+function renderEmpleados(){
+  const c = document.getElementById('content');
+  c.innerHTML = `
+  <div class="page-header">
+    <h2>👤 Empleados</h2>
+    <button class="btn btn-primary" onclick="openEmpModal()">+ Nuevo empleado</button>
+  </div>
+  <div class="table-wrap" id="emp-table"></div>`;
+  listen('empleados','empleados', ()=>{ renderEmpTable(); });
+  listen('ventas','ventas', ()=>renderEmpTable());
+}
+
+function renderEmpTable(){
+  const t = document.getElementById('emp-table'); if(!t) return;
+  if(!S.empleados.length){
+    t.innerHTML='<div class="empty"><div class="empty-icon">👤</div><p>Sin empleados registrados</p></div>'; return;
+  }
+  // Include admin stats
+  const adminUid = S.user?.uid;
+  const adminNombre = S.user?.email?.split('@')[0]||'Admin';
+  const adminVentas = S.ventas.filter(v=>v.empleadoId===adminUid);
+  const adminRow = adminUid ? [{
+    id: adminUid, nombre: adminNombre+' (admin)', rol:'admin',
+    _ventas: adminVentas.length, _total: adminVentas.reduce((a,v)=>a+(v.total||0),0),
+    _isAdmin: true
+  }] : [];
+
+  const empRows = S.empleados.map(e=>{
+    const ev = S.ventas.filter(v=>v.empleadoId===e.id);
+    return {...e, _ventas:ev.length, _total:ev.reduce((a,v)=>a+(v.total||0),0)};
+  });
+
+  const allRows = [...adminRow, ...empRows];
+
+  t.innerHTML = `<table>
+    <thead><tr><th>Empleado</th><th>Documento</th><th>Celular</th><th>Rol</th><th>Ventas</th><th>Total generado</th><th></th></tr></thead>
+    <tbody>${allRows.map(e=>`<tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:34px;height:34px;border-radius:50%;background:${avatarColor(e.nombre)};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#04100a;flex-shrink:0">${initials(e.nombre)}</div>
+          <div>
+            <div style="font-weight:600;font-size:13.5px">${e.nombre}</div>
+            <div style="font-size:11.5px;color:var(--text3)">${e.email||''}</div>
+          </div>
+        </div>
+      </td>
+      <td class="text-xs text-muted">${e.docTipo?e.docTipo+' '+e.docNum:'—'}</td>
+      <td class="text-xs text-muted">${e.celular||'—'}</td>
+      <td><span class="badge ${e.rol==='admin'?'badge-gold':e.rol==='gerente'?'badge-green':'badge-blue'}">${e.rol==='admin'?'Admin':e.rol==='gerente'?'Gerente':'Empleado'}</span></td>
+      <td>${e._ventas}</td>
+      <td class="text-accent font-bold">${fmt(e._total)}</td>
+      <td>
+        ${!e._isAdmin?`<div style="display:flex;gap:4px">
+          <button class="btn btn-ghost btn-sm btn-icon cf-edit-emp" data-cid="${e.id}">✏️</button>
+          <button class="btn btn-danger btn-sm btn-icon cf-del-emp" data-cid="${e.id}">🗑</button>
+        </div>`:''}
+      </td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+function openEmpModal(id=null){
+  const e = id ? S.empleados.find(x=>x.id===id) : null;
+  showModal(`
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2>${e?'Editar':'Nuevo'} empleado</h2>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="field"><label>Nombre completo *</label>
+            <input id="e-nombre" value="${e?.nombre||''}" placeholder="Ana García"/>
+          </div>
+          <div class="field"><label>Email</label>
+            <input id="e-email" type="email" value="${e?.email||''}" placeholder="ana@negocio.com"/>
+          </div>
+          <div class="field"><label>Tipo de documento</label>
+            <select id="e-doctype">
+              <option value="CC"${e?.docTipo==='CC'?' selected':''}>C.C. — Cédula de Ciudadanía</option>
+              <option value="CE"${e?.docTipo==='CE'?' selected':''}>C.E. — Cédula de Extranjería</option>
+              <option value="PP"${e?.docTipo==='PP'?' selected':''}>Pasaporte</option>
+              <option value="TI"${e?.docTipo==='TI'?' selected':''}>T.I. — Tarjeta de Identidad</option>
+            </select>
+          </div>
+          <div class="field"><label>Número de documento</label>
+            <input id="e-docnum" value="${e?.docNum||''}" placeholder="1234567890"/>
+          </div>
+          <div class="field"><label>Número de celular</label>
+            <div style="display:flex;gap:6px">
+              <select id="e-cel-code" style="width:auto;min-width:110px">${PHONE_CODES.map(([code,flag,name])=>`<option value="${code}"${(e?.celularCode||'+57')===code?' selected':''}>${flag} ${code}</option>`).join('')}</select>
+              <input id="e-celular" value="${e?.celular||''}" placeholder="300 000 0000" style="flex:1"/>
+            </div>
+          </div>
+          <div class="field"><label>WhatsApp (si es diferente)</label>
+            <div style="display:flex;gap:6px">
+              <select id="e-wa-code" style="width:auto;min-width:110px">${PHONE_CODES.map(([code,flag,name])=>`<option value="${code}"${(e?.whatsappCode||'+57')===code?' selected':''}>${flag} ${code}</option>`).join('')}</select>
+              <input id="e-whatsapp" value="${e?.whatsapp||''}" placeholder="310 000 0000" style="flex:1"/>
+            </div>
+          </div>
+          <div class="field"><label>Usuario * <span style="font-size:11px;color:var(--text3)">(para login empleado)</span></label>
+            <input id="e-usuario" value="${e?.usuario||''}" placeholder="ana.garcia"/>
+          </div>
+          <div class="field"><label>Contraseña ${e?'(vacío = no cambiar)':''} *</label>
+            <input id="e-pass" type="password" placeholder="••••••••"/>
+          </div>
+          <div class="field"><label>Rol</label>
+            <select id="e-rol">
+              <option value="empleado"${(!e||e?.rol==='empleado')?' selected':''}>Empleado — Solo POS</option>
+              <option value="gerente"${e?.rol==='gerente'?' selected':''}>Gerente — POS + Gestión</option>
+              <option value="admin"${e?.rol==='admin'?' selected':''}>Admin (dueño) — Acceso completo</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveEmp('${id||''}')">Guardar</button>
+      </div>
+    </div>
+  </div>`);
+}
+
+// Phone country codes
+const PHONE_CODES = [
+  ['+57','🇨🇴','Colombia'],['+1','🇺🇸','USA/Canadá'],['+52','🇲🇽','México'],
+  ['+58','🇻🇪','Venezuela'],['+51','🇵🇪','Perú'],['+56','🇨🇱','Chile'],
+  ['+54','🇦🇷','Argentina'],['+55','🇧🇷','Brasil'],['+502','🇬🇹','Guatemala'],
+  ['+506','🇨🇷','Costa Rica'],['+507','🇵🇦','Panamá'],['+503','🇸🇻','El Salvador'],
+  ['+504','🇭🇳','Honduras'],['+505','🇳🇮','Nicaragua'],['+591','🇧🇴','Bolivia'],
+  ['+593','🇪🇨','Ecuador'],['+595','🇵🇾','Paraguay'],['+598','🇺🇾','Uruguay'],
+  ['+1809','🇩🇴','Rep. Dominicana'],['+34','🇪🇸','España'],['+44','🇬🇧','Reino Unido'],
+  ['+49','🇩🇪','Alemania'],['+33','🇫🇷','Francia'],['+39','🇮🇹','Italia'],
+];
+
+async function saveEmp(id){
+  const nombre  = document.getElementById('e-nombre').value.trim();
+  const usuario = document.getElementById('e-usuario').value.trim();
+  const pass    = document.getElementById('e-pass').value;
+  if(!nombre||!usuario){ toast('Nombre y usuario son requeridos','warn'); return; }
+  if(!id&&!pass){ toast('La contraseña es requerida para nuevos empleados','warn'); return; }
+
+  const celCode = document.getElementById('e-cel-code').value;
+  const celNum  = document.getElementById('e-celular').value.trim();
+  const waCode  = document.getElementById('e-wa-code').value;
+  const waNum   = document.getElementById('e-whatsapp').value.trim();
+
+  const data = {
+    nombre, usuario,
+    email:    document.getElementById('e-email').value.trim(),
+    rol:      document.getElementById('e-rol').value,
+    docTipo:  document.getElementById('e-doctype').value,
+    docNum:   document.getElementById('e-docnum').value.trim(),
+    celularCode: celCode,
+    celular:  celNum ? celCode+' '+celNum : '',
+    whatsappCode: waCode,
+    whatsapp: waNum ? waCode+' '+waNum : (celNum ? celCode+' '+celNum : ''),
+  };
+  if(pass) data.password = pass;
+
+  try{
+    let empId = id;
+    if(id){
+      await col('empleados').doc(id).update(data);
+    } else {
+      data.creado = tsNow();
+      const ref = await col('empleados').add(data);
+      empId = ref.id;
+    }
+    // Sync to global emp_directory for login
+    await db.collection('emp_directory').doc(usuario).set({
+      ...data, adminUid: S.uid, id: empId
+    });
+    // If username changed, remove old entry
+    const oldEmp = S.empleados.find(e=>e.id===id);
+    if(oldEmp && oldEmp.usuario && oldEmp.usuario!==usuario){
+      await db.collection('emp_directory').doc(oldEmp.usuario).delete();
+    }
+    toast(id?'Empleado actualizado ✅':'Empleado creado ✅');
+    closeModal();
+  }catch(e){ toast(e.message,'error'); }
+}
+
+async function deleteEmp(id){
+  if(!id){ toast('ID inválido','error'); return; }
+  confirmDialog('¿Eliminar este empleado? Sus ventas se conservarán.', async()=>{
+    try{
+      const emp = S.empleados.find(e=>e.id===id);
+      const ok = await safeDelete('empleados', id);
+      if(ok){
+        // Remove from global directory
+        if(emp?.usuario){
+          try{ await db.collection('emp_directory').doc(emp.usuario).delete(); }catch(e){}
+        }
+        toast('Empleado eliminado');
+      }
+    }catch(e){ toast(e.message,'error'); }
+  });
+}
+</script>
