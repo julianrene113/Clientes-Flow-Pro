@@ -1154,9 +1154,24 @@ function openDeleteAll(){
 
 async function execDeleteAll(){
   const cols = ['clientes','ventas','pagos','citas','catalogo','empleados','invLog','devoluciones'].filter(c=>document.getElementById('del-'+c)?.checked);
+  const borrarEmpleados = document.getElementById('del-empleados')?.checked;
   closeModal();
   toast('Borrando datos…','warn');
   try{
+    // Si se va a borrar la colección de empleados, primero limpiamos también
+    // sus registros en emp_directory (colección global usada para el login
+    // de empleado/gerente) — de lo contrario, el empleado borrado del negocio
+    // sigue pudiendo iniciar sesión porque su credencial vive ahí, no aquí.
+    if(borrarEmpleados){
+      const empSnap = await col('empleados').get();
+      for(const d of empSnap.docs){
+        const usuario = d.data()?.usuario;
+        if(usuario){
+          try{ await db.collection('emp_directory').doc(usuario).delete(); }
+          catch(e){ console.warn('No se pudo borrar emp_directory/'+usuario, e); }
+        }
+      }
+    }
     for(const c of cols){
       const snap = await col(c).get();
       if(snap.empty) continue;
