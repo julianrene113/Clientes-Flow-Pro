@@ -341,10 +341,10 @@ tr:hover td{background:rgba(18,32,22,.6)}
       <div class="nav-item admin-only" data-page="whatsapp" onclick="go('whatsapp')"><span class="ni">💬</span><span class="nl">WhatsApp</span></div>
       <div class="nav-item admin-only" data-page="exportar" onclick="go('exportar')"><span class="ni">⬇️</span><span class="nl">Exportar</span></div>
 
-      <div class="nav-section-label admin-only">Admin</div>
-      <div class="nav-item admin-only" data-page="empleados" onclick="go('empleados')"><span class="ni">👤</span><span class="nl">Empleados</span></div>
-      <div class="nav-item admin-only" data-page="config" onclick="go('config')"><span class="ni">⚙️</span><span class="nl">Configuración</span></div>
-      <div class="nav-item admin-only" data-page="politicas" onclick="go('politicas')"><span class="ni">📋</span><span class="nl">Políticas & T&C</span></div>
+      <div class="nav-section-label owner-only">Admin</div>
+      <div class="nav-item owner-only" data-page="empleados" onclick="go('empleados')"><span class="ni">👤</span><span class="nl">Empleados</span></div>
+      <div class="nav-item owner-only" data-page="config" onclick="go('config')"><span class="ni">⚙️</span><span class="nl">Configuración</span></div>
+      <div class="nav-item owner-only" data-page="politicas" onclick="go('politicas')"><span class="ni">📋</span><span class="nl">Políticas & T&C</span></div>
     </div>
 
     <div class="sidebar-bottom">
@@ -676,9 +676,12 @@ function enterApp(){
   if(!S.uid){ console.error('enterApp called without uid'); return; }
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
-  // Admin-only elements
+  // Admin-only elements: visible to admin + gerente (operational management)
   const isAdmin = S.role==='admin'||S.role==='gerente';
   document.querySelectorAll('.admin-only').forEach(el=>el.classList.toggle('hidden',!isAdmin));
+  // Owner-only elements: visible ONLY to the real admin/dueño (Empleados, Config, Políticas)
+  const isOwner = S.role==='admin';
+  document.querySelectorAll('.owner-only').forEach(el=>el.classList.toggle('hidden',!isOwner));
   // Sidebar info
   const name = S.empData?.nombre || S.user?.email?.split('@')[0] || 'Admin';
   document.getElementById('sb-bizname').textContent = S.bizName;
@@ -697,9 +700,11 @@ async function doLogout(){
   document.getElementById('app').classList.add('hidden');
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('admin-pass').value='';
+  document.getElementById('emp-pass').value='';
   document.getElementById('login-error').textContent='';
   document.getElementById('role-select').style.display='';
   showLogin();
+  selectRole('admin');
 }
 
 // Auto-login if Firebase session exists
@@ -723,6 +728,11 @@ const PAGE_TITLES = {
 };
 
 function go(page, params={}){
+  const OWNER_ONLY_PAGES = ['empleados','config','politicas'];
+  if(OWNER_ONLY_PAGES.includes(page) && S.role!=='admin'){
+    toast('No tienes permiso para acceder a esta sección','warn');
+    page = 'dashboard';
+  }
   stopListeners();
   S.page = page;
   // Update nav items
@@ -3009,11 +3019,12 @@ function openEmpModal(id=null){
             <input id="e-pass" type="password" placeholder="••••••••"/>
           </div>
           <div class="field"><label>Rol</label>
-            <select id="e-rol">
+            <select id="e-rol" ${S.role!=='admin'?'disabled':''}>
               <option value="empleado"${(!e||e?.rol==='empleado')?' selected':''}>Empleado — Solo POS</option>
               <option value="gerente"${e?.rol==='gerente'?' selected':''}>Gerente — POS + Gestión</option>
-              <option value="admin"${e?.rol==='admin'?' selected':''}>Admin (dueño) — Acceso completo</option>
+              ${S.role==='admin'?`<option value="admin"${e?.rol==='admin'?' selected':''}>Admin (dueño) — Acceso completo</option>`:''}
             </select>
+            ${S.role!=='admin'?'<div style="font-size:11.5px;color:var(--text3);margin-top:4px">Solo el administrador puede cambiar roles</div>':''}
           </div>
         </div>
       </div>
@@ -3042,7 +3053,7 @@ async function saveEmp(id){
   const data = {
     nombre, usuario,
     email:    document.getElementById('e-email').value.trim(),
-    rol:      document.getElementById('e-rol').value,
+    rol:      S.role==='admin' ? document.getElementById('e-rol').value : 'empleado',
     docTipo:  document.getElementById('e-doctype').value,
     docNum:   document.getElementById('e-docnum').value.trim(),
     celularCode: celCode,
