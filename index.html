@@ -470,6 +470,19 @@ function isSameDay(d1,d2){
   return d1.getFullYear()===d2.getFullYear()&&d1.getMonth()===d2.getMonth()&&d1.getDate()===d2.getDate();
 }
 
+// ── PHONE CODES (global, used in client + employee modals) ──
+const PHONE_CODES = [
+  ['+57','🇨🇴','Colombia'],['+1','🇺🇸','USA/Canadá'],['+52','🇲🇽','México'],
+  ['+58','🇻🇪','Venezuela'],['+51','🇵🇪','Perú'],['+56','🇨🇱','Chile'],
+  ['+54','🇦🇷','Argentina'],['+55','🇧🇷','Brasil'],['+502','🇬🇹','Guatemala'],
+  ['+506','🇨🇷','Costa Rica'],['+507','🇵🇦','Panamá'],['+503','🇸🇻','El Salvador'],
+  ['+504','🇭🇳','Honduras'],['+505','🇳🇮','Nicaragua'],['+591','🇧🇴','Bolivia'],
+  ['+593','🇪🇨','Ecuador'],['+595','🇵🇾','Paraguay'],['+598','🇺🇾','Uruguay'],
+  ['+1809','🇩🇴','Rep. Dominicana'],['+34','🇪🇸','España'],['+44','🇬🇧','Reino Unido'],
+  ['+49','🇩🇪','Alemania'],['+33','🇫🇷','Francia'],['+39','🇮🇹','Italia'],
+  ['+61','🇦🇺','Australia'],['+81','🇯🇵','Japón'],['+86','🇨🇳','China'],
+];
+
 // ═══════════════════════════════════════════════════════════
 //  TOAST
 // ═══════════════════════════════════════════════════════════
@@ -617,13 +630,22 @@ async function loginEmp(){
     if(!snap.exists){ setLoginError('Usuario no encontrado'); return; }
     const data = snap.data();
     if(data.password!==pass){ setLoginError('Contraseña incorrecta'); return; }
+    // Employees aren't Firebase Auth users — sign in anonymously so
+    // request.auth exists and Firestore security rules don't block reads.
+    // The real gate is the username/password check above.
+    if(!auth.currentUser){
+      await auth.signInAnonymously();
+    }
     S.uid = data.adminUid;
     S.role = data.rol||'empleado';
     S.empData = {id:snap.id,...data};
     localStorage.setItem('lastEmpUser',user);
     await loadConfig();
     enterApp();
-  }catch(e){ setLoginError(e.message); }
+  }catch(e){
+    const msgs={'auth/operation-not-allowed':'Falta activar "Anónimo" en Firebase Console → Authentication → Sign-in method'};
+    setLoginError(msgs[e.code]||e.message);
+  }
 }
 
 async function resetPassword(){
@@ -650,6 +672,8 @@ async function loadConfig(){
 //  APP ENTRY / EXIT
 // ═══════════════════════════════════════════════════════════
 function enterApp(){
+  // Guard: ensure uid is set
+  if(!S.uid){ console.error('enterApp called without uid'); return; }
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   // Admin-only elements
@@ -680,7 +704,7 @@ async function doLogout(){
 
 // Auto-login if Firebase session exists
 auth.onAuthStateChanged(user=>{
-  if(user && !S.uid){
+  if(user && !user.isAnonymous && !S.uid){
     S.user=user; S.uid=user.uid; S.role='admin';
     loadConfig().then(()=>enterApp());
   }
@@ -935,7 +959,7 @@ function updateDash(){
   if(el('ds-citas')) el('ds-citas').textContent = citasHoy.length;
   if(el('ds-citas-sub')) el('ds-citas-sub').textContent = citasHoy.filter(c=>c.estado==='pendiente'||!c.estado).length + ' pendientes';
 
-  const deudaTotal = S.clientes.reduce((a,cl)=>a+(cl.deuda||0),0);
+  const deudaTotal = S.clientes.reduce((a,cl)=>a+Math.max(0,cl.deuda||0),0);
   if(el('ds-deuda')) el('ds-deuda').textContent = fmt(deudaTotal);
   if(el('ds-deuda-sub')) el('ds-deuda-sub').textContent = S.clientes.filter(cl=>(cl.deuda||0)>0).length + ' clientes con deuda';
 
@@ -1226,8 +1250,12 @@ function renderPOS(){
     if(wrap) wrap.style.gridTemplateColumns='1fr';
   }
 
-  listen('catalogo','catalogo', renderPOSItems);
-  renderPOSItems();
+  // Show loading while catalog loads
+  const posGrid = document.getElementById('pos-items');
+  if(posGrid) posGrid.innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">⏳</div><p>Cargando catálogo…</p></div>';
+  listen('catalogo','catalogo', ()=>{
+    renderPOSItems();
+  });
   renderCart();
 }
 
@@ -1456,6 +1484,8 @@ function renderClientes(){
     document.head.appendChild(s);
   }
 
+  const cg = document.getElementById('client-grid');
+  if(cg) cg.innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">⏳</div><p>Cargando clientes…</p></div>';
   listen('clientes','clientes', renderClientGrid);
   listen('ventas','ventas', renderClientGrid);
 }
@@ -1523,7 +1553,12 @@ function openClientModal(id=null){
       <div class="modal-body">
         <div class="form-grid">
           <div class="field"><label>Nombre completo *</label><input id="cl-nombre" value="${cl?.nombre||''}" placeholder="María López"/></div>
-          <div class="field"><label>Teléfono</label><input id="cl-tel" value="${cl?.telefono||''}" placeholder="+57 300 000 0000"/></div>
+          <div class="field"><label>Teléfono</label>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <select id="cl-tel-code" style="width:auto;min-width:88px;flex-shrink:0">${PHONE_CODES.map(([code,flag])=>`<option value="${code}"${(cl?.telefonoCode||'+57')===code?' selected':''}>${flag} ${code}</option>`).join('')}</select>
+              <input id="cl-tel" value="${cl?.telefonoNum||cl?.telefono?.replace(/^\+\d+\s/,'')||''}" placeholder="300 000 0000" style="flex:1;min-width:120px"/>
+            </div>
+          </div>
           <div class="field"><label>Email</label><input id="cl-email" type="email" value="${cl?.email||''}" placeholder="maria@ejemplo.com"/></div>
           <div class="field"><label>Cumpleaños</label><input id="cl-bday" type="date" value="${cl?.cumpleanos||''}"/></div>
         </div>
@@ -1552,7 +1587,9 @@ async function saveClient(id){
   const tags = [...document.querySelectorAll('[data-tag].active')].map(el=>el.dataset.tag);
   const data = {
     nombre,
-    telefono: document.getElementById('cl-tel').value.trim(),
+    telefonoCode: document.getElementById('cl-tel-code')?.value||'+57',
+    telefonoNum:  document.getElementById('cl-tel').value.trim(),
+    telefono: (document.getElementById('cl-tel-code')?.value||'+57')+' '+document.getElementById('cl-tel').value.trim(),
     email:    document.getElementById('cl-email').value.trim(),
     cumpleanos: document.getElementById('cl-bday').value,
     notas:    document.getElementById('cl-notas').value.trim(),
@@ -1655,7 +1692,7 @@ function updatePerfilStats(cl){
   if(el('ps-compras')) el('ps-compras').textContent = fmt(ventas.reduce((a,v)=>a+(v.total||0),0));
   if(el('ps-visitas'))  el('ps-visitas').textContent  = ventas.length + citas.length;
   if(el('ps-citas'))    el('ps-citas').textContent    = citas.length;
-  if(el('ps-deuda'))    el('ps-deuda').textContent    = fmt(cl.deuda||0);
+  if(el('ps-deuda'))    el('ps-deuda').textContent    = fmt(Math.max(0,cl.deuda||0));
 }
 
 function updatePerfilData(clientId){
@@ -2825,7 +2862,13 @@ async function markPagoCobrado(pid, cid, monto){
     const batch = db.batch();
     batch.update(col('pagos').doc(pid),{estado:'cobrado'});
     if(cid && cid!=='null' && cid.trim()!==''){
-      batch.update(col('clientes').doc(cid),{deuda: firebase.firestore.FieldValue.increment(-monto)});
+      // Only decrement debt if client exists and has debt
+      const clSnap = await col('clientes').doc(cid).get();
+      if(clSnap.exists){
+        const currentDeuda = clSnap.data().deuda||0;
+        const newDeuda = Math.max(0, currentDeuda - monto);
+        batch.update(col('clientes').doc(cid),{deuda: newDeuda});
+      }
     }
     await batch.commit();
     toast('Cobro marcado como pagado ✅');
@@ -2839,7 +2882,13 @@ async function deletePago(pid, cid, monto){
       const batch = db.batch();
       batch.delete(col('pagos').doc(pid));
       if(cid && cid!=='null' && cid.trim()!=='' && monto>0){
-        batch.update(col('clientes').doc(cid),{deuda: firebase.firestore.FieldValue.increment(-monto)});
+        // Only decrement debt if client exists and has debt
+      const clSnap = await col('clientes').doc(cid).get();
+      if(clSnap.exists){
+        const currentDeuda = clSnap.data().deuda||0;
+        const newDeuda = Math.max(0, currentDeuda - monto);
+        batch.update(col('clientes').doc(cid),{deuda: newDeuda});
+      }
       }
       await batch.commit();
       toast('Cobro eliminado');
@@ -2976,17 +3025,7 @@ function openEmpModal(id=null){
   </div>`);
 }
 
-// Phone country codes
-const PHONE_CODES = [
-  ['+57','🇨🇴','Colombia'],['+1','🇺🇸','USA/Canadá'],['+52','🇲🇽','México'],
-  ['+58','🇻🇪','Venezuela'],['+51','🇵🇪','Perú'],['+56','🇨🇱','Chile'],
-  ['+54','🇦🇷','Argentina'],['+55','🇧🇷','Brasil'],['+502','🇬🇹','Guatemala'],
-  ['+506','🇨🇷','Costa Rica'],['+507','🇵🇦','Panamá'],['+503','🇸🇻','El Salvador'],
-  ['+504','🇭🇳','Honduras'],['+505','🇳🇮','Nicaragua'],['+591','🇧🇴','Bolivia'],
-  ['+593','🇪🇨','Ecuador'],['+595','🇵🇾','Paraguay'],['+598','🇺🇾','Uruguay'],
-  ['+1809','🇩🇴','Rep. Dominicana'],['+34','🇪🇸','España'],['+44','🇬🇧','Reino Unido'],
-  ['+49','🇩🇪','Alemania'],['+33','🇫🇷','Francia'],['+39','🇮🇹','Italia'],
-];
+// PHONE_CODES defined globally in Part 1
 
 async function saveEmp(id){
   const nombre  = document.getElementById('e-nombre').value.trim();
