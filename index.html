@@ -341,10 +341,10 @@ tr:hover td{background:rgba(18,32,22,.6)}
       <div class="nav-item admin-only" data-page="whatsapp" onclick="go('whatsapp')"><span class="ni">💬</span><span class="nl">WhatsApp</span></div>
       <div class="nav-item admin-only" data-page="exportar" onclick="go('exportar')"><span class="ni">⬇️</span><span class="nl">Exportar</span></div>
 
-      <div class="nav-section-label admin-only">Admin</div>
-      <div class="nav-item admin-only" data-page="empleados" onclick="go('empleados')"><span class="ni">👤</span><span class="nl">Empleados</span></div>
-      <div class="nav-item admin-only" data-page="config" onclick="go('config')"><span class="ni">⚙️</span><span class="nl">Configuración</span></div>
-      <div class="nav-item admin-only" data-page="politicas" onclick="go('politicas')"><span class="ni">📋</span><span class="nl">Políticas & T&C</span></div>
+      <div class="nav-section-label owner-only">Admin</div>
+      <div class="nav-item owner-only" data-page="empleados" onclick="go('empleados')"><span class="ni">👤</span><span class="nl">Empleados</span></div>
+      <div class="nav-item owner-only" data-page="config" onclick="go('config')"><span class="ni">⚙️</span><span class="nl">Configuración</span></div>
+      <div class="nav-item owner-only" data-page="politicas" onclick="go('politicas')"><span class="ni">📋</span><span class="nl">Políticas & T&C</span></div>
     </div>
 
     <div class="sidebar-bottom">
@@ -428,6 +428,7 @@ const S = {
   citas: [],
   empleados: [],
   invLog: [],
+  devoluciones: [],
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -630,13 +631,22 @@ async function loginEmp(){
     if(!snap.exists){ setLoginError('Usuario no encontrado'); return; }
     const data = snap.data();
     if(data.password!==pass){ setLoginError('Contraseña incorrecta'); return; }
+    // Employees aren't Firebase Auth users — sign in anonymously so
+    // request.auth exists and Firestore security rules don't block reads.
+    // The real gate is the username/password check above.
+    if(!auth.currentUser){
+      await auth.signInAnonymously();
+    }
     S.uid = data.adminUid;
     S.role = data.rol||'empleado';
     S.empData = {id:snap.id,...data};
     localStorage.setItem('lastEmpUser',user);
     await loadConfig();
     enterApp();
-  }catch(e){ setLoginError(e.message); }
+  }catch(e){
+    const msgs={'auth/operation-not-allowed':'Falta activar "Anónimo" en Firebase Console → Authentication → Sign-in method'};
+    setLoginError(msgs[e.code]||e.message);
+  }
 }
 
 async function resetPassword(){
@@ -667,9 +677,12 @@ function enterApp(){
   if(!S.uid){ console.error('enterApp called without uid'); return; }
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
-  // Admin-only elements
+  // Admin-only elements: visible to admin + gerente (operational management)
   const isAdmin = S.role==='admin'||S.role==='gerente';
   document.querySelectorAll('.admin-only').forEach(el=>el.classList.toggle('hidden',!isAdmin));
+  // Owner-only elements: visible ONLY to the real admin/dueño (Empleados, Config, Políticas)
+  const isOwner = S.role==='admin';
+  document.querySelectorAll('.owner-only').forEach(el=>el.classList.toggle('hidden',!isOwner));
   // Sidebar info
   const name = S.empData?.nombre || S.user?.email?.split('@')[0] || 'Admin';
   document.getElementById('sb-bizname').textContent = S.bizName;
@@ -684,18 +697,20 @@ async function doLogout(){
   stopListeners();
   try{ await auth.signOut(); }catch(e){}
   S.uid=null; S.user=null; S.role='admin'; S.empData=null;
-  S.clientes=[]; S.catalogo=[]; S.ventas=[]; S.pagos=[]; S.citas=[]; S.empleados=[]; S.invLog=[];
+  S.clientes=[]; S.catalogo=[]; S.ventas=[]; S.pagos=[]; S.citas=[]; S.empleados=[]; S.invLog=[]; S.devoluciones=[];
   document.getElementById('app').classList.add('hidden');
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('admin-pass').value='';
+  document.getElementById('emp-pass').value='';
   document.getElementById('login-error').textContent='';
   document.getElementById('role-select').style.display='';
   showLogin();
+  selectRole('admin');
 }
 
 // Auto-login if Firebase session exists
 auth.onAuthStateChanged(user=>{
-  if(user && !S.uid){
+  if(user && !user.isAnonymous && !S.uid){
     S.user=user; S.uid=user.uid; S.role='admin';
     loadConfig().then(()=>enterApp());
   }
@@ -714,6 +729,11 @@ const PAGE_TITLES = {
 };
 
 function go(page, params={}){
+  const OWNER_ONLY_PAGES = ['empleados','config','politicas'];
+  if(OWNER_ONLY_PAGES.includes(page) && S.role!=='admin'){
+    toast('No tienes permiso para acceder a esta sección','warn');
+    page = 'dashboard';
+  }
   stopListeners();
   S.page = page;
   // Update nav items
@@ -874,9 +894,10 @@ document.getElementById('reg-pass2').addEventListener('keydown',e=>{ if(e.key===
 // ── DASHBOARD ──────────────────────────────────────────────
 function renderDashboard(){
   const c = document.getElementById('content');
+  const isOwnerView = S.role==='admin';
   c.innerHTML = `
   <div class="stat-grid" id="dash-stats">
-    <div class="stat-card"><div class="sc-label">Ingresos del mes</div><div class="sc-value text-accent" id="ds-ingresos">…</div><div class="sc-sub" id="ds-ingresos-sub"></div></div>
+    <div class="stat-card"><div class="sc-label">${isOwnerView?'Ingresos del mes':'Mis ventas del mes'}</div><div class="sc-value text-accent" id="ds-ingresos">…</div><div class="sc-sub" id="ds-ingresos-sub"></div></div>
     <div class="stat-card"><div class="sc-label">Clientes activos</div><div class="sc-value" id="ds-clientes">…</div><div class="sc-sub">total registrados</div></div>
     <div class="stat-card"><div class="sc-label">Citas hoy</div><div class="sc-value" id="ds-citas">…</div><div class="sc-sub" id="ds-citas-sub"></div></div>
     <div class="stat-card"><div class="sc-label">Cobros pendientes</div><div class="sc-value text-red" id="ds-deuda">…</div><div class="sc-sub" id="ds-deuda-sub"></div></div>
@@ -885,11 +906,11 @@ function renderDashboard(){
   <div style="display:grid;grid-template-columns:1fr 340px;gap:18px" id="dash-grid">
     <div style="display:flex;flex-direction:column;gap:16px">
       <div class="card">
-        <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:14px">📊 Ingresos por mes (últimos 6)</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:14px">📊 ${isOwnerView?'Ingresos por mes (últimos 6)':'Mis ventas por mes (últimos 6)'}</div>
         <canvas id="chart-ingresos" height="160"></canvas>
       </div>
       <div class="card">
-        <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:12px">🗂 Resumen financiero del mes</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:12px">🗂 ${isOwnerView?'Resumen financiero del mes':'Resumen de mis ventas'}</div>
         <div id="dash-resumen"></div>
       </div>
     </div>
@@ -933,12 +954,15 @@ function updateDash(){
   const today = new Date(); today.setHours(0,0,0,0);
   const tomorrow = new Date(today); tomorrow.setDate(today.getDate()+1);
   const startMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  const isOwnerView = S.role==='admin';
+  const myId = S.role==='admin' ? S.user?.uid : S.empData?.id;
 
   // ── Stats ──
-  const monthV = S.ventas.filter(v=>{ const d=toDate(v.fecha); return d&&d>=startMonth; });
+  const ventasBase = isOwnerView ? S.ventas : S.ventas.filter(v=>v.empleadoId===myId);
+  const monthV = ventasBase.filter(v=>{ const d=toDate(v.fecha); return d&&d>=startMonth; });
   const ingServ = monthV.filter(v=>v.tipo==='servicio').reduce((a,v)=>a+(v.total||0),0);
   const ingProd = monthV.filter(v=>v.tipo!=='servicio').reduce((a,v)=>a+(v.total||0),0);
-  const ingPagos = S.pagos.filter(p=>{ const d=toDate(p.fecha); return d&&d>=startMonth&&p.estado==='cobrado'; }).reduce((a,p)=>a+(p.monto||0),0);
+  const ingPagos = isOwnerView ? S.pagos.filter(p=>{ const d=toDate(p.fecha); return d&&d>=startMonth&&p.estado==='cobrado'; }).reduce((a,p)=>a+(p.monto||0),0) : 0;
   const total = ingServ + ingProd + ingPagos;
 
   const el = id=>document.getElementById(id);
@@ -951,8 +975,8 @@ function updateDash(){
   if(el('ds-citas-sub')) el('ds-citas-sub').textContent = citasHoy.filter(c=>c.estado==='pendiente'||!c.estado).length + ' pendientes';
 
   const deudaTotal = S.clientes.reduce((a,cl)=>a+Math.max(0,cl.deuda||0),0);
-  if(el('ds-deuda')) el('ds-deuda').textContent = fmt(deudaTotal);
-  if(el('ds-deuda-sub')) el('ds-deuda-sub').textContent = S.clientes.filter(cl=>(cl.deuda||0)>0).length + ' clientes con deuda';
+  if(el('ds-deuda')) el('ds-deuda').textContent = isOwnerView ? fmt(deudaTotal) : '—';
+  if(el('ds-deuda-sub')) el('ds-deuda-sub').textContent = isOwnerView ? (S.clientes.filter(cl=>(cl.deuda||0)>0).length + ' clientes con deuda') : 'Visible solo para el administrador';
 
   // ── Chart ──
   const ctx = el('chart-ingresos');
@@ -963,8 +987,8 @@ function updateDash(){
       months.push(d.toLocaleDateString('es-CO',{month:'short'}));
       const s = new Date(d.getFullYear(), d.getMonth(), 1);
       const e = new Date(d.getFullYear(), d.getMonth()+1, 1);
-      const t = S.ventas.filter(v=>{const dd=toDate(v.fecha);return dd&&dd>=s&&dd<e;}).reduce((a,v)=>a+(v.total||0),0)
-              + S.pagos.filter(p=>{const dd=toDate(p.fecha);return dd&&dd>=s&&dd<e&&p.estado==='cobrado';}).reduce((a,p)=>a+(p.monto||0),0);
+      const t = ventasBase.filter(v=>{const dd=toDate(v.fecha);return dd&&dd>=s&&dd<e;}).reduce((a,v)=>a+(v.total||0),0)
+              + (isOwnerView ? S.pagos.filter(p=>{const dd=toDate(p.fecha);return dd&&dd>=s&&dd<e&&p.estado==='cobrado';}).reduce((a,p)=>a+(p.monto||0),0) : 0);
       vals.push(t);
     }
     if(dashChart) dashChart.destroy();
@@ -980,16 +1004,16 @@ function updateDash(){
 
   // ── Resumen financiero ──
   const res = el('dash-resumen');
-  if(res) res.innerHTML = [
-    ['💇 Servicios', ingServ],
-    ['📦 Productos', ingProd],
-    ['💳 Cobros manuales', ingPagos],
-    ['💰 Total', total]
-  ].map(([lbl,val],i)=>`
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;${i<3?'border-bottom:1px solid var(--border)':''}">
-      <span style="font-size:13px;color:var(--text2)">${lbl}</span>
-      <span style="font-family:Syne,sans-serif;font-weight:700;font-size:${i===3?'16':'14'}px;${i===3?'color:var(--accent)':''}">${fmt(val)}</span>
-    </div>`).join('');
+  if(res){
+    const rows = isOwnerView
+      ? [['💇 Servicios', ingServ],['📦 Productos', ingProd],['💳 Cobros manuales', ingPagos],['💰 Total', total]]
+      : [['💇 Servicios', ingServ],['📦 Productos', ingProd],['💰 Total vendido por mí', total]];
+    res.innerHTML = rows.map(([lbl,val],i)=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;${i<rows.length-1?'border-bottom:1px solid var(--border)':''}">
+        <span style="font-size:13px;color:var(--text2)">${lbl}</span>
+        <span style="font-family:Syne,sans-serif;font-weight:700;font-size:${i===rows.length-1?'16':'14'}px;${i===rows.length-1?'color:var(--accent)':''}">${fmt(val)}</span>
+      </div>`).join('');
+  }
 
   // ── Citas de hoy ──
   const ch = el('dash-citas-hoy');
@@ -1111,7 +1135,7 @@ function openDeleteAll(){
           <input id="del-confirm" placeholder="BORRAR TODO" oninput="document.getElementById('btn-del-all').disabled=this.value!=='BORRAR TODO'"/>
         </div>
         <div style="display:flex;flex-direction:column;gap:8px">
-          ${['clientes','ventas','pagos','citas','catalogo','empleados','invLog'].map(col=>`
+          ${['clientes','ventas','pagos','citas','catalogo','empleados','invLog','devoluciones'].map(col=>`
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
             <input type="checkbox" id="del-${col}" checked style="width:auto"/> ${col.charAt(0).toUpperCase()+col.slice(1)}
           </label>`).join('')}
@@ -1129,7 +1153,7 @@ function openDeleteAll(){
 }
 
 async function execDeleteAll(){
-  const cols = ['clientes','ventas','pagos','citas','catalogo','empleados','invLog'].filter(c=>document.getElementById('del-'+c)?.checked);
+  const cols = ['clientes','ventas','pagos','citas','catalogo','empleados','invLog','devoluciones'].filter(c=>document.getElementById('del-'+c)?.checked);
   closeModal();
   toast('Borrando datos…','warn');
   try{
@@ -1178,6 +1202,7 @@ function renderPOS(){
           <option value="producto">Productos</option>
         </select>
         <button class="btn btn-ghost btn-icon" onclick="openPOSScanner()" title="Escanear código de barras">📷</button>
+        <button class="btn btn-ghost btn-icon" onclick="openDevolucionesPOS()" title="Devoluciones / Reembolsos">↩️</button>
       </div>
       <div id="pos-items" style="flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;align-content:start;padding-right:2px"></div>
     </div>
@@ -1399,6 +1424,278 @@ async function confirmarVenta(){
   }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
+// ═══════════════════════════════════════════════════════════
+//  DEVOLUCIONES / REEMBOLSOS
+//  No se borra ni modifica la venta original — se registra un
+//  documento de devolución vinculado, y se marca en la venta
+//  cuánto de cada item ya fue reembolsado (soporta parciales).
+// ═══════════════════════════════════════════════════════════
+
+function cantidadDisponibleParaDevolver(venta, itemId){
+  const item = (venta.items||[]).find(i=>i.id===itemId);
+  if(!item) return 0;
+  const yaDevuelto = (venta.reembolsado||{})[itemId] || 0;
+  return Math.max(0, item.qty - yaDevuelto);
+}
+
+// Busca la venta en S.ventas (módulo Ventas) o en el pool temporal cargado
+// desde el POS (window._devVentasPOS), para que el mismo modal sirva en ambos flujos.
+function buscarVentaParaDevolucion(ventaId){
+  return S.ventas.find(v=>v.id===ventaId) || (window._devVentasPOS||[]).find(v=>v.id===ventaId);
+}
+
+// ── Entrada desde el POS — empleados ven solo lo suyo, admin/gerente ven todo ──
+async function openDevolucionesPOS(){
+  showModal(`
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal modal-lg">
+      <div class="modal-header"><h2>↩️ Devoluciones / Reembolsos</h2><button class="modal-close" onclick="closeModal()">✕</button></div>
+      <div class="modal-body">
+        <input id="devpos-search" placeholder="🔍 Buscar por nombre del cliente…" oninput="renderDevPOSList()"/>
+        <div id="devpos-list" style="max-height:420px;overflow-y:auto;display:flex;flex-direction:column;gap:8px">
+          <div class="empty" style="padding:20px"><div class="empty-icon">⏳</div><p>Cargando ventas recientes…</p></div>
+        </div>
+      </div>
+    </div>
+  </div>`);
+
+  try{
+    const esEmpleadoRaso = S.role==='empleado';
+    const myId = S.empData?.id;
+    let query = esEmpleadoRaso
+      ? col('ventas').where('empleadoId','==',myId).orderBy('fecha','desc').limit(100)
+      : col('ventas').orderBy('fecha','desc').limit(100);
+    const snap = await query.get();
+    let ventas = snap.docs.map(d=>({id:d.id,...d.data()}));
+    window._devVentasPOS = ventas;
+    renderDevPOSList();
+  }catch(e){
+    const list = document.getElementById('devpos-list');
+    if(list) list.innerHTML = `<div class="empty" style="padding:20px"><p>Error al cargar: ${e.message}</p></div>`;
+  }
+}
+
+function renderDevPOSList(){
+  const list = document.getElementById('devpos-list'); if(!list) return;
+  const q = (document.getElementById('devpos-search')?.value||'').toLowerCase();
+  let ventas = window._devVentasPOS||[];
+  if(q) ventas = ventas.filter(v=>(v.clienteNombre||'').toLowerCase().includes(q));
+
+  if(!ventas.length){ list.innerHTML='<div class="empty" style="padding:20px"><p>Sin ventas encontradas</p></div>'; return; }
+
+  list.innerHTML = ventas.slice(0,40).map(v=>{
+    const estado = v.estadoReembolso;
+    const estadoBadge = estado==='total' ? '<span class="badge badge-red">Reembolsada</span>' : estado==='parcial' ? '<span class="badge badge-gold">Parcial</span>' : '';
+    return `
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div style="flex:1;min-width:140px">
+        <div style="font-size:13.5px;font-weight:600">${v.clienteNombre||'Sin cliente'} ${estadoBadge}</div>
+        <div style="font-size:12px;color:var(--text3)">${fmtDate(v.fecha)} · ${(v.items||[]).map(i=>`${i.nombre} x${i.qty}`).join(', ')}</div>
+      </div>
+      <div style="font-family:Syne,sans-serif;font-weight:700;color:var(--accent)">${fmt(v.total)}</div>
+      ${estado!=='total'?`<button class="btn btn-danger btn-sm" onclick="closeModal();openDevolucionModal('${v.id}')">↩️ Devolver</button>`:''}
+    </div>`;
+  }).join('');
+}
+
+function openDevolucionModal(ventaId){
+  const venta = buscarVentaParaDevolucion(ventaId);
+  if(!venta){ toast('Venta no encontrada','error'); return; }
+
+  const itemsConDisponible = (venta.items||[]).map(it=>({
+    ...it,
+    disponible: cantidadDisponibleParaDevolver(venta, it.id)
+  }));
+
+  if(itemsConDisponible.every(it=>it.disponible<=0)){
+    toast('Esta venta ya fue reembolsada completamente','warn');
+    return;
+  }
+
+  showModal(`
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2>↩️ Devolución / Reembolso</h2>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size:12.5px;color:var(--text3)">
+          Venta del ${fmtDate(venta.fecha)} · Cliente: <strong style="color:var(--text2)">${venta.clienteNombre||'Sin cliente'}</strong> · Total original: <strong style="color:var(--accent)">${fmt(venta.total)}</strong>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px" id="dev-items">
+          ${itemsConDisponible.map((it,idx)=>`
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;${it.disponible<=0?'opacity:.4':''}">
+            <label style="display:flex;align-items:center;gap:8px;flex:1;min-width:160px;cursor:${it.disponible>0?'pointer':'not-allowed'}">
+              <input type="checkbox" class="dev-chk" data-idx="${idx}" style="width:auto" ${it.disponible<=0?'disabled':''} onchange="updateDevQtyState(${idx})"/>
+              <span style="font-size:13.5px;font-weight:600">${it.nombre}</span>
+              <span class="badge ${it.tipo==='servicio'?'badge-blue':'badge-green'}" style="font-size:10px">${it.tipo==='servicio'?'Servicio':'Producto'}</span>
+            </label>
+            <div style="font-size:12px;color:var(--text3)">Comprado: ${it.qty} · Disponible: ${it.disponible}</div>
+            <input type="number" class="dev-qty" data-idx="${idx}" min="0" max="${it.disponible}" value="0" disabled style="width:70px" onchange="this.value=Math.min(Math.max(0,parseInt(this.value)||0),${it.disponible})"/>
+            <span style="font-size:12.5px;color:var(--text3)">x ${fmt(it.precio)}</span>
+          </div>`).join('')}
+        </div>
+        <div class="field"><label>Motivo de la devolución *</label>
+          <select id="dev-motivo">
+            <option value="">Selecciona un motivo…</option>
+            <option value="dañado">Producto dañado / defectuoso</option>
+            <option value="equivocado">Producto/servicio equivocado</option>
+            <option value="cliente_no_satisfecho">Cliente no satisfecho</option>
+            <option value="error_cobro">Error en el cobro</option>
+            <option value="otro">Otro</option>
+          </select>
+        </div>
+        <div class="field" id="dev-otro-wrap" style="display:none"><label>Especifica el motivo</label><input id="dev-motivo-otro" placeholder="Describe el motivo…"/></div>
+        <div class="field"><label>Notas adicionales</label><textarea id="dev-notas" rows="2" placeholder="Detalles opcionales…"></textarea></div>
+        <div id="dev-stock-wrap" style="display:none">
+          <div class="field"><label>¿El producto físico regresa al inventario?</label>
+            <select id="dev-stock-decision">
+              <option value="regresa">Sí — regresa al inventario (puede revenderse)</option>
+              <option value="descarta">No — se perdió o está dañado (no regresa)</option>
+            </select>
+          </div>
+        </div>
+        <div style="background:var(--surface);border-radius:8px;padding:12px;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:13px;color:var(--text2)">Total a reembolsar</span>
+          <span id="dev-total" style="font-family:Syne,sans-serif;font-weight:700;font-size:18px;color:var(--red)">$0</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-danger" id="btn-confirm-dev" onclick="confirmarDevolucion('${ventaId}')">↩️ Confirmar devolución</button>
+      </div>
+    </div>
+  </div>`);
+
+  // Store items data on a temp var for calculation access
+  window._devItemsTemp = itemsConDisponible;
+
+  document.getElementById('dev-motivo').addEventListener('change', e=>{
+    document.getElementById('dev-otro-wrap').style.display = e.target.value==='otro' ? 'block' : 'none';
+  });
+  document.querySelectorAll('.dev-qty').forEach(inp=>inp.addEventListener('input', recalcDevTotal));
+  recalcDevTotal();
+}
+
+function updateDevQtyState(idx){
+  const chk = document.querySelector(`.dev-chk[data-idx="${idx}"]`);
+  const qtyInput = document.querySelector(`.dev-qty[data-idx="${idx}"]`);
+  if(!chk||!qtyInput) return;
+  qtyInput.disabled = !chk.checked;
+  if(chk.checked && qtyInput.value==='0'){
+    const max = parseInt(qtyInput.max)||0;
+    qtyInput.value = max>0 ? 1 : 0;
+  } else if(!chk.checked){
+    qtyInput.value = 0;
+  }
+  recalcDevTotal();
+}
+
+function recalcDevTotal(){
+  const items = window._devItemsTemp||[];
+  let total = 0;
+  let tieneProductoFisico = false;
+  document.querySelectorAll('.dev-qty').forEach(inp=>{
+    const idx = parseInt(inp.dataset.idx);
+    const qty = parseInt(inp.value)||0;
+    const it = items[idx];
+    if(it && qty>0){
+      total += qty * it.precio;
+      if(it.tipo==='producto') tieneProductoFisico = true;
+    }
+  });
+  const totalEl = document.getElementById('dev-total');
+  if(totalEl) totalEl.textContent = fmt(total);
+  const stockWrap = document.getElementById('dev-stock-wrap');
+  if(stockWrap) stockWrap.style.display = tieneProductoFisico ? 'block' : 'none';
+}
+
+async function confirmarDevolucion(ventaId){
+  const venta = buscarVentaParaDevolucion(ventaId);
+  if(!venta){ toast('Venta no encontrada','error'); return; }
+
+  const motivoSel = document.getElementById('dev-motivo').value;
+  if(!motivoSel){ toast('Selecciona un motivo','warn'); return; }
+  const motivo = motivoSel==='otro' ? (document.getElementById('dev-motivo-otro').value.trim()||'Otro') : motivoSel;
+  const notas = document.getElementById('dev-notas').value.trim();
+  const stockDecision = document.getElementById('dev-stock-decision')?.value || 'regresa';
+
+  const items = window._devItemsTemp||[];
+  const itemsADevolver = [];
+  document.querySelectorAll('.dev-qty').forEach(inp=>{
+    const idx = parseInt(inp.dataset.idx);
+    const qty = parseInt(inp.value)||0;
+    const it = items[idx];
+    if(it && qty>0) itemsADevolver.push({...it, qtyDevuelta: qty});
+  });
+
+  if(!itemsADevolver.length){ toast('Selecciona al menos un item a devolver','warn'); return; }
+
+  const montoTotal = itemsADevolver.reduce((a,i)=>a+i.qtyDevuelta*i.precio,0);
+  const empNombre = S.empData?.nombre || S.user?.email?.split('@')[0] || 'Admin';
+  const empId = S.empData?.id || S.user?.uid || null;
+
+  try{
+    const batch = db.batch();
+
+    // 1. Registrar la devolución como documento aparte (no se toca la venta original)
+    const devRef = col('devoluciones').doc();
+    batch.set(devRef,{
+      ventaId, motivo, notas,
+      items: itemsADevolver.map(i=>({id:i.id, nombre:i.nombre, tipo:i.tipo, qty:i.qtyDevuelta, precio:i.precio})),
+      monto: montoTotal,
+      clienteId: venta.clienteId||null, clienteNombre: venta.clienteNombre||'Sin cliente',
+      empleadoId: empId, empleadoNombre: empNombre,
+      stockDecision: itemsADevolver.some(i=>i.tipo==='producto') ? stockDecision : null,
+      fecha: tsNow()
+    });
+
+    // 2. Marcar en la venta original cuánto se ha reembolsado por item
+    const reembolsadoActual = {...(venta.reembolsado||{})};
+    for(const it of itemsADevolver){
+      reembolsadoActual[it.id] = (reembolsadoActual[it.id]||0) + it.qtyDevuelta;
+    }
+    const totalReembolsadoQty = Object.values(reembolsadoActual).reduce((a,v)=>a+v,0);
+    const totalItemsQty = (venta.items||[]).reduce((a,i)=>a+i.qty,0);
+    const estadoReembolso = totalReembolsadoQty>=totalItemsQty ? 'total' : 'parcial';
+    batch.update(col('ventas').doc(ventaId), {reembolsado: reembolsadoActual, estadoReembolso});
+
+    // 3. Si hay productos físicos y el stock regresa, devolverlo al inventario + log
+    if(stockDecision==='regresa'){
+      for(const it of itemsADevolver){
+        if(it.tipo==='producto'){
+          batch.update(col('catalogo').doc(it.id), {stock: firebase.firestore.FieldValue.increment(it.qtyDevuelta)});
+          const logRef = col('invLog').doc();
+          batch.set(logRef,{
+            productoId:it.id, nombre:it.nombre, tipo:'entrada',
+            cantidad:it.qtyDevuelta, motivo:'Devolución de venta', fecha:tsNow(),
+            stockDespues: (S.catalogo.find(c=>c.id===it.id)?.stock||0) + it.qtyDevuelta
+          });
+        }
+      }
+    } else {
+      for(const it of itemsADevolver){
+        if(it.tipo==='producto'){
+          const logRef = col('invLog').doc();
+          batch.set(logRef,{
+            productoId:it.id, nombre:it.nombre, tipo:'salida',
+            cantidad:0, motivo:'Devolución — producto descartado (dañado/perdido), no regresa a stock', fecha:tsNow(),
+            stockDespues: S.catalogo.find(c=>c.id===it.id)?.stock||0
+          });
+        }
+      }
+    }
+
+    // 4. Si el cliente había quedado con deuda asociada por error de cobro, no se toca aquí
+    //    (las devoluciones son independientes de los cobros manuales / pagos).
+
+    await batch.commit();
+    toast(`Devolución registrada: ${fmt(montoTotal)} ✅`);
+    closeModal();
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
 // ── BARCODE SCANNER ──
 let scanStream=null, scanInterval=null;
 
@@ -1545,9 +1842,9 @@ function openClientModal(id=null){
         <div class="form-grid">
           <div class="field"><label>Nombre completo *</label><input id="cl-nombre" value="${cl?.nombre||''}" placeholder="María López"/></div>
           <div class="field"><label>Teléfono</label>
-            <div style="display:flex;gap:6px">
-              <select id="cl-tel-code" style="width:auto;min-width:100px">${PHONE_CODES.map(([code,flag])=>`<option value="${code}"${(cl?.telefonoCode||'+57')===code?' selected':''}>${flag} ${code}</option>`).join('')}</select>
-              <input id="cl-tel" value="${cl?.telefonoNum||cl?.telefono?.replace(/^\+\d+\s/,'')||''}" placeholder="300 000 0000" style="flex:1"/>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <select id="cl-tel-code" style="width:auto;min-width:88px;flex-shrink:0">${PHONE_CODES.map(([code,flag])=>`<option value="${code}"${(cl?.telefonoCode||'+57')===code?' selected':''}>${flag} ${code}</option>`).join('')}</select>
+              <input id="cl-tel" value="${cl?.telefonoNum||cl?.telefono?.replace(/^\+\d+\s/,'')||''}" placeholder="300 000 0000" style="flex:1;min-width:120px"/>
             </div>
           </div>
           <div class="field"><label>Email</label><input id="cl-email" type="email" value="${cl?.email||''}" placeholder="maria@ejemplo.com"/></div>
@@ -1683,7 +1980,7 @@ function updatePerfilStats(cl){
   if(el('ps-compras')) el('ps-compras').textContent = fmt(ventas.reduce((a,v)=>a+(v.total||0),0));
   if(el('ps-visitas'))  el('ps-visitas').textContent  = ventas.length + citas.length;
   if(el('ps-citas'))    el('ps-citas').textContent    = citas.length;
-  if(el('ps-deuda'))    el('ps-deuda').textContent    = fmt(cl.deuda||0);
+  if(el('ps-deuda'))    el('ps-deuda').textContent    = fmt(Math.max(0,cl.deuda||0));
 }
 
 function updatePerfilData(clientId){
@@ -2453,6 +2750,11 @@ document.addEventListener('click', function(e){
     const id = el.dataset.cid;
     if(id && typeof deleteVenta==='function') deleteVenta(id);
   }
+  // Devolución / Reembolso
+  else if(cls.includes('cf-devolver-venta')){
+    const id = el.dataset.cid;
+    if(id && typeof openDevolucionModal==='function') openDevolucionModal(id);
+  }
 });
 </script>
 <script>
@@ -2726,6 +3028,7 @@ function renderVentas(){
 
   listen('ventas','ventas', ()=>{ fillEmpFilter(); renderVentasTable(); });
   listen('empleados','empleados', fillEmpFilter);
+  listen('devoluciones','devoluciones', ()=>{});
 }
 
 function fillEmpFilter(){
@@ -2761,8 +3064,12 @@ function renderVentasTable(){
   if(!list.length){ t.innerHTML='<div class="empty"><div class="empty-icon">💰</div><p>Sin ventas en el período</p></div>'; return; }
 
   t.innerHTML = `<table>
-    <thead><tr><th>Fecha</th><th>Cliente</th><th>Items</th><th>Total</th><th>Método</th><th>Empleado</th><th>Tipo</th></tr></thead>
-    <tbody>${list.slice(0,100).map(v=>`<tr>
+    <thead><tr><th>Fecha</th><th>Cliente</th><th>Items</th><th>Total</th><th>Método</th><th>Empleado</th><th>Tipo</th><th>Estado</th><th></th></tr></thead>
+    <tbody>${list.slice(0,100).map(v=>{
+      const estado = v.estadoReembolso;
+      const estadoBadge = estado==='total' ? '<span class="badge badge-red">Reembolsada</span>' : estado==='parcial' ? '<span class="badge badge-gold">Parcial</span>' : '<span class="badge badge-green">OK</span>';
+      const puedeDevolver = estado!=='total';
+      return `<tr>
       <td class="text-muted text-xs">${fmtDate(v.fecha)} ${fmtTime(v.fecha)}</td>
       <td class="text-sm">${v.clienteNombre||'Sin cliente'}</td>
       <td class="text-sm text-muted" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(v.items||[]).map(i=>`${i.nombre} x${i.qty}`).join(', ')}</td>
@@ -2770,7 +3077,9 @@ function renderVentasTable(){
       <td class="text-sm text-muted">${v.metodo||'—'}</td>
       <td class="text-sm text-muted">${v.empleadoNombre||'—'}</td>
       <td><span class="badge ${v.tipo==='servicio'?'badge-blue':'badge-green'}" style="font-size:10.5px">${v.tipo==='servicio'?'Servicio':'Producto'}</span></td>
-    </tr>`).join('')}</tbody>
+      <td>${estadoBadge}</td>
+      <td>${puedeDevolver?`<button class="btn btn-ghost btn-sm cf-devolver-venta" data-cid="${v.id}">↩️ Devolver</button>`:''}</td>
+    </tr>`;}).join('')}</tbody>
   </table>`;
 }
 
@@ -3000,11 +3309,12 @@ function openEmpModal(id=null){
             <input id="e-pass" type="password" placeholder="••••••••"/>
           </div>
           <div class="field"><label>Rol</label>
-            <select id="e-rol">
+            <select id="e-rol" ${S.role!=='admin'?'disabled':''}>
               <option value="empleado"${(!e||e?.rol==='empleado')?' selected':''}>Empleado — Solo POS</option>
               <option value="gerente"${e?.rol==='gerente'?' selected':''}>Gerente — POS + Gestión</option>
-              <option value="admin"${e?.rol==='admin'?' selected':''}>Admin (dueño) — Acceso completo</option>
+              ${S.role==='admin'?`<option value="admin"${e?.rol==='admin'?' selected':''}>Admin (dueño) — Acceso completo</option>`:''}
             </select>
+            ${S.role!=='admin'?'<div style="font-size:11.5px;color:var(--text3);margin-top:4px">Solo el administrador puede cambiar roles</div>':''}
           </div>
         </div>
       </div>
@@ -3033,7 +3343,7 @@ async function saveEmp(id){
   const data = {
     nombre, usuario,
     email:    document.getElementById('e-email').value.trim(),
-    rol:      document.getElementById('e-rol').value,
+    rol:      S.role==='admin' ? document.getElementById('e-rol').value : 'empleado',
     docTipo:  document.getElementById('e-doctype').value,
     docNum:   document.getElementById('e-docnum').value.trim(),
     celularCode: celCode,
@@ -3169,11 +3479,13 @@ function renderRepGeneral(el){
   const servT = S.ventas.filter(v=>v.tipo==='servicio').reduce((a,v)=>a+(v.total||0),0);
   const prodT = S.ventas.filter(v=>v.tipo!=='servicio').reduce((a,v)=>a+(v.total||0),0);
 
-  // Top 10 mix
+  // Top 10 mix — usa el tipo real de cada item, con el tipo de la venta como
+  // único respaldo cuando el item no lo trae (no asumir nunca "producto" por defecto)
   const mix={};
   S.ventas.forEach(v=>(v.items||[]).forEach(i=>{
-    const k=i.nombre+'|'+(i.tipo||v.tipo||'producto');
-    if(!mix[k]) mix[k]={nombre:i.nombre,tipo:i.tipo||v.tipo,qty:0};
+    const tipoItem = i.tipo || v.tipo || 'producto';
+    const k=i.nombre+'|'+tipoItem;
+    if(!mix[k]) mix[k]={nombre:i.nombre,tipo:tipoItem,qty:0};
     mix[k].qty+=i.qty;
   }));
   const topMix=Object.values(mix).sort((a,b)=>b.qty-a.qty).slice(0,10);
@@ -3218,14 +3530,23 @@ function renderRepEmpleados(el){
   },80);
 }
 
+// ── REPORTE DE SERVICIOS ──
+// FIX: el bug original incluía productos aquí porque el filtro de venta
+// (v.tipo==='servicio') no garantiza que CADA item dentro de esa venta sea
+// un servicio — una venta puede mezclar un corte de cabello con una gaseosa,
+// y v.tipo solo refleja si HABÍA AL MENOS UN servicio en el carrito (ver
+// confirmarVenta: tipo = POS.cart.some(i=>i.tipo==='servicio') ? 'servicio' : ...).
+// La solución correcta es filtrar por el tipo de CADA ITEM individualmente,
+// recorriendo TODAS las ventas (no solo las de tipo==='servicio') y
+// quedándonos solo con los items cuyo i.tipo==='servicio'.
 function renderRepServicios(el){
   const svcMap={};
-  S.ventas.filter(v=>v.tipo==='servicio').forEach(v=>(v.items||[]).forEach(i=>{
+  S.ventas.forEach(v=>(v.items||[]).filter(i=>i.tipo==='servicio').forEach(i=>{
     if(!svcMap[i.nombre]) svcMap[i.nombre]={qty:0,total:0};
     svcMap[i.nombre].qty+=i.qty; svcMap[i.nombre].total+=(i.precio||0)*i.qty;
   }));
   const sorted=Object.entries(svcMap).sort((a,b)=>b[1].total-a[1].total).slice(0,15);
-  const totalServ=S.ventas.filter(v=>v.tipo==='servicio').reduce((a,v)=>a+(v.total||0),0);
+  const totalServ=Object.values(svcMap).reduce((a,d)=>a+d.total,0);
 
   el.innerHTML=`
   <div class="stat-grid mb-4">
@@ -3245,14 +3566,17 @@ function renderRepServicios(el){
   },80);
 }
 
+// ── REPORTE DE PRODUCTOS ──
+// Mismo criterio: filtra por i.tipo==='producto' en TODAS las ventas,
+// nunca por el tipo agregado de la venta completa.
 function renderRepProductos(el){
   const prodMap={};
-  S.ventas.forEach(v=>(v.items||[]).filter(i=>i.tipo==='producto'||(v.tipo!=='servicio'&&!i.tipo)).forEach(i=>{
+  S.ventas.forEach(v=>(v.items||[]).filter(i=>i.tipo==='producto').forEach(i=>{
     if(!prodMap[i.nombre]) prodMap[i.nombre]={qty:0,total:0};
     prodMap[i.nombre].qty+=i.qty; prodMap[i.nombre].total+=(i.precio||0)*i.qty;
   }));
   const sorted=Object.entries(prodMap).sort((a,b)=>b[1].total-a[1].total).slice(0,15);
-  const totalProd=S.ventas.filter(v=>v.tipo!=='servicio').reduce((a,v)=>a+(v.total||0),0);
+  const totalProd=Object.values(prodMap).reduce((a,d)=>a+d.total,0);
   const totalUnid=Object.values(prodMap).reduce((a,v)=>a+v.qty,0);
 
   el.innerHTML=`
@@ -3511,11 +3835,166 @@ function exportBackup(){
     exportDate:new Date().toISOString(),
     clientes:S.clientes, ventas:S.ventas, pagos:S.pagos,
     catalogo:S.catalogo, empleados:S.empleados.map(e=>({...e,password:undefined})),
-    citas:S.citas, invLog:S.invLog
+    citas:S.citas, invLog:S.invLog, devoluciones:S.devoluciones
   };
   const a=document.createElement('a');
   a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(data,null,2));
   a.download=`backup_${new Date().toISOString().slice(0,10)}.json`; a.click();
   toast('Backup exportado ✅');
+}
+</script>
+<script>
+// ═══════════════════════════════════════════════════════════
+//  PARTE 10 — POLÍTICAS DE PRIVACIDAD Y CONDICIONES DE USO
+//  Estructura de 8 puntos solicitada explícitamente por el cliente,
+//  basada en el modelo de avisos legales de entidades públicas
+//  colombianas (MinTIC), adaptada a lo que realmente hace esta app.
+// ═══════════════════════════════════════════════════════════
+
+function renderPoliticas(){
+  const c = document.getElementById('content');
+  c.innerHTML = `
+  <div class="page-header"><h2>📋 Políticas de Privacidad y Condiciones de Uso</h2></div>
+  <div class="card">
+    <p style="color:var(--text3);font-size:12px;margin-bottom:4px">Última actualización: 25 de junio de 2024</p>
+    <div id="pol-toc" style="display:flex;flex-direction:column;gap:4px;margin:16px 0;padding:14px;background:var(--surface);border-radius:8px"></div>
+    <div id="pol-body" style="line-height:1.8;color:var(--text2);font-size:14px;display:flex;flex-direction:column;gap:22px"></div>
+  </div>`;
+  renderPolBody();
+}
+
+function renderPolBody(){
+  const link = (url, txt) => `<a href="${url}" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">${txt} ↗</a>`;
+  const sec = (num, title, body) => `<div id="pol-sec-${num}">
+    <h3 style="color:var(--text);font-size:15px;font-weight:700;margin-bottom:8px">${num}. ${title}</h3>
+    <div>${body}</div></div>`;
+  const subsec = (num, title, body) => `<div id="pol-sec-${num}" style="margin-top:10px;margin-left:8px;padding-left:12px;border-left:2px solid var(--border)">
+    <h4 style="color:var(--text);font-size:13.5px;font-weight:700;margin-bottom:6px">${num}. ${title}</h4>
+    <div>${body}</div></div>`;
+
+  const toc = document.getElementById('pol-toc');
+  if(toc){
+    const items = [
+      ['1','Aceptación de los términos'],
+      ['2','Derechos de propiedad intelectual'],
+      ['3','Información y sitios web de terceros'],
+      ['4','Aviso legal'],
+      ['5','Deberes y prohibiciones de los Ciudadanos-Usuarios'],
+      ['6','Aviso de privacidad'],
+      ['7','Política de seguridad y protección de datos'],
+      ['8','Ley y jurisdicción aplicable'],
+    ];
+    toc.innerHTML = items.map(([n,t])=>`<a href="#pol-sec-${n}" onclick="document.getElementById('pol-sec-${n}').scrollIntoView({behavior:'smooth'});return false;" style="color:var(--accent);font-size:13px;text-decoration:none">${n}. ${t}</a>`).join('');
+  }
+
+  const intro = `
+  <p>El contenido de esta aplicación web (en adelante, <strong>ClienteFlow Pro</strong>) está sujeto a las condiciones aquí expuestas. Las personas que la usan (en adelante, <strong>Ciudadanos-Usuarios</strong>), al acceder, navegar o usar este sitio, reconocen que han leído, entendido y se obligan a cumplir con estos términos, leyes y reglamentos. Si el Ciudadano-Usuario no está de acuerdo con la presente política, le sugerimos abstenerse de utilizar este sitio web.</p>
+  <div style="background:rgba(74,222,128,.06);border:1px solid rgba(74,222,128,.2);border-radius:8px;padding:12px;margin-top:10px;font-size:13px">
+    <p style="margin-bottom:6px"><strong>Marco normativo de referencia:</strong></p>
+    <ul style="margin-left:18px;display:flex;flex-direction:column;gap:4px">
+      <li>${link('https://www.mintic.gov.co/portal/715/articles-2627_Resolucion_2239_de_2024.pdf','Resolución 2239 de 2024')} — Política General de Seguridad y Privacidad de la Información, Seguridad Digital y Continuidad de la Operación del Ministerio/Fondo Único de Tecnologías de la Información y las Comunicaciones. Deroga la Resolución 448 de 2022.</li>
+      <li>${link('https://www.mintic.gov.co/portal/715/articles-2627_Resolucion_2238_de_2024.pdf','Resolución 2238 de 2024')} — Política de Tratamiento de Datos Personales del Ministerio/Fondo Único de Tecnologías de la Información y las Comunicaciones. Deroga la Resolución 924 de 2020.</li>
+      <li><strong>Ley 1581 de 2012</strong> — Régimen general de protección de datos personales (Habeas Data, Colombia).</li>
+    </ul>
+  </div>`;
+
+  const body = [
+    `<div>${intro}</div>`,
+
+    sec('1','Aceptación de los términos',
+      `<p>El acceso y uso de ClienteFlow Pro implica la aceptación plena, expresa e irrevocable de estos Términos y Condiciones por parte del Ciudadano-Usuario. Aplican adicionalmente la legislación de la República de Colombia y la normativa internacional que resulte aplicable.</p>`
+      + subsec('1.1','Uso del sitio web por parte de menores de edad',
+        `<p>El acceso a esta plataforma está dirigido a personas mayores de 18 años. Los menores de edad solo podrán acceder bajo la supervisión directa de un adulto responsable que haya aceptado estos términos en su nombre y se haga responsable del tratamiento de cualquier dato relacionado.</p>`)
+    ),
+
+    sec('2','Derechos de propiedad intelectual',
+      `<p>El software, diseño visual, código fuente, estructura de base de datos, logotipos y demás contenidos de ClienteFlow Pro son propiedad intelectual de sus desarrolladores y están protegidos por las leyes de propiedad intelectual de Colombia y los tratados internacionales aplicables.</p>
+      <p style="margin-top:8px">Se otorga al administrador de cada cuenta una licencia de uso personal, no exclusiva e intransferible, limitada a la operación de su propio negocio. Queda <strong>expresamente prohibido</strong> reproducir, distribuir, modificar, descompilar, sublicenciar o comercializar el software sin autorización escrita previa.</p>
+      <p style="margin-top:8px">Los datos ingresados por cada administrador (clientes, ventas, inventario, empleados) son de su exclusiva propiedad y pueden ser exportados o eliminados en cualquier momento desde el módulo de Exportar y desde Configuración.</p>`
+    ),
+
+    sec('3','Información y sitios web de terceros',
+      `<p>ClienteFlow Pro se integra con los siguientes servicios de terceros para su funcionamiento:</p>
+      <ul style="margin:8px 0 0 20px;display:flex;flex-direction:column;gap:4px">
+        <li><strong>Google Firebase</strong> (Authentication y Firestore) — almacenamiento de datos y autenticación de usuarios</li>
+        <li><strong>WhatsApp</strong> — envío de mensajes mediante enlaces directos (wa.me), sin integración de API oficial de pago</li>
+        <li><strong>GitHub Pages</strong> — alojamiento (hosting) de la aplicación</li>
+      </ul>
+      <p style="margin-top:8px">Estos servicios se rigen por sus propias políticas de privacidad y términos de uso. ClienteFlow Pro no se responsabiliza por el contenido, disponibilidad, cambios de tarifas o prácticas de privacidad de dichos servicios externos.</p>`
+    ),
+
+    sec('4','Aviso legal',
+      `<p>La información gestionada a través de ClienteFlow Pro (datos de clientes, empleados, ventas, inventario, citas y cobros) es responsabilidad exclusiva del administrador de cada cuenta, quien actúa como responsable del tratamiento frente a sus propios clientes y empleados.</p>
+      <p style="margin-top:8px">ClienteFlow Pro actúa únicamente como herramienta tecnológica (encargado técnico del tratamiento a través de su infraestructura) y no se hace responsable por:</p>
+      <ul style="margin:8px 0 0 20px;display:flex;flex-direction:column;gap:4px">
+        <li>El uso indebido que el administrador haga de los datos de sus propios clientes o empleados</li>
+        <li>Decisiones comerciales, financieras o de cualquier otra índole tomadas con base en la información mostrada en la plataforma</li>
+        <li>Pérdidas derivadas de interrupciones del servicio de terceros (Firebase, WhatsApp, GitHub Pages, conectividad a internet)</li>
+        <li>El contenido de los mensajes enviados por el administrador o sus empleados a través de la función de WhatsApp</li>
+      </ul>`
+    ),
+
+    sec('5','Deberes y prohibiciones de los Ciudadanos-Usuarios',
+      `<p>Todo Ciudadano-Usuario de ClienteFlow Pro (administrador, gerente o empleado) se compromete a:</p>
+      <ul style="margin:8px 0 0 20px;display:flex;flex-direction:column;gap:5px">
+        <li>Usar la plataforma de forma lícita, ética y conforme a la ley colombiana vigente</li>
+        <li>No intentar acceder, sin autorización, a datos de otros negocios, administradores o cuentas distintas a la propia</li>
+        <li>No introducir virus, malware, ni realizar ataques informáticos, ingeniería inversa o intentos de vulnerar la seguridad de la plataforma</li>
+        <li>Respetar la privacidad y confidencialidad de los datos de clientes y empleados que ingrese al sistema</li>
+        <li>Cumplir con la Ley 1581 de 2012 y demás normativa de protección de datos al recopilar información de sus propios clientes</li>
+        <li>No compartir sus credenciales de acceso (correo, contraseña, usuario de empleado) con personas no autorizadas</li>
+        <li>Notificar de inmediato cualquier uso no autorizado de su cuenta del que tenga conocimiento</li>
+      </ul>
+      <p style="margin-top:8px">El incumplimiento de estos deberes puede acarrear la suspensión o cancelación del acceso a la plataforma, sin perjuicio de las acciones legales que correspondan.</p>`
+    ),
+
+    sec('6','Aviso de privacidad',
+      `<p><strong>Responsable del tratamiento:</strong> el titular de la cuenta administrador registrada en la plataforma. Contacto: ${link('mailto:julianrene113@gmail.com','julianrene113@gmail.com')}.</p>
+      <p style="margin-top:8px"><strong>Datos que se recopilan:</strong></p>
+      <ul style="margin:6px 0 0 20px;display:flex;flex-direction:column;gap:4px">
+        <li><strong>Clientes del negocio:</strong> nombre, teléfono, email, fecha de cumpleaños, notas, historial de compras y citas</li>
+        <li><strong>Empleados:</strong> nombre, tipo y número de documento (C.C./C.E./pasaporte/T.I.), celular, WhatsApp, usuario y contraseña</li>
+        <li><strong>Transacciones del negocio:</strong> ventas, devoluciones, pagos, movimientos de inventario</li>
+        <li><strong>Administrador:</strong> correo electrónico y contraseña, gestionados directamente por Firebase Authentication</li>
+      </ul>
+      <p style="margin-top:8px"><strong>Finalidad:</strong> estos datos se usan exclusivamente para la operación de la plataforma (gestión de clientes, ventas, inventario, agenda y análisis del negocio). No se utilizan con fines publicitarios, no se venden ni se comparten con terceros distintos de los proveedores tecnológicos mencionados en el punto 3.</p>
+      <p style="margin-top:8px"><strong>Derechos del titular (ARCO):</strong> conforme a la Ley 1581 de 2012, toda persona cuyos datos sean tratados a través de esta plataforma tiene derecho a conocer, actualizar, rectificar y solicitar la eliminación de sus datos, así como a oponerse a su tratamiento. Para ejercer estos derechos, contacte al administrador del negocio correspondiente o escriba a ${link('mailto:julianrene113@gmail.com','julianrene113@gmail.com')}. Toda solicitud será atendida en un plazo máximo de <strong>15 días hábiles</strong>.</p>
+      <p style="margin-top:8px"><strong>Vigencia y eliminación:</strong> los datos se conservan mientras la cuenta del negocio esté activa. El administrador puede eliminar permanentemente todos los datos desde <strong>Configuración → Zona de peligro → Borrar datos del negocio</strong>.</p>`
+    ),
+
+    sec('7','Política de seguridad y protección de datos',
+      `<p>Implementamos medidas técnicas y organizativas razonables para proteger los datos personales tratados a través de la plataforma, en línea con los lineamientos de la ${link('https://www.mintic.gov.co/portal/715/articles-2627_Resolucion_2239_de_2024.pdf','Resolución MinTIC 2239 de 2024')}:</p>
+      <ul style="margin:8px 0 0 20px;display:flex;flex-direction:column;gap:4px">
+        <li>Autenticación segura mediante Firebase Authentication (correo/contraseña para administradores; validación de credenciales propia para empleados)</li>
+        <li>Cifrado de las comunicaciones en tránsito mediante HTTPS/TLS</li>
+        <li>Cifrado en reposo en los servidores de Google Cloud / Firebase</li>
+        <li>Reglas de seguridad de Firestore que restringen el acceso a los datos de cada negocio a sus propios usuarios autenticados</li>
+        <li>Control de acceso diferenciado por roles: Administrador (acceso completo), Gerente (gestión operativa) y Empleado (acceso restringido al Punto de Venta y a sus propias ventas)</li>
+        <li>Registro de auditoría de movimientos de inventario y devoluciones, con trazabilidad de antes/después</li>
+      </ul>`
+      + subsec('7.1','Política de seguridad de la información',
+        `<p>Seguimos los lineamientos de la Resolución MinTIC 2239 de 2024 sobre Seguridad Digital y Continuidad de la Operación, adaptados a la naturaleza de esta plataforma:</p>
+        <ul style="margin:6px 0 0 20px;display:flex;flex-direction:column;gap:4px">
+          <li>Las contraseñas de los administradores se almacenan y gestionan de forma segura a través de Firebase Authentication, sin acceso directo de la aplicación a su valor en texto plano</li>
+          <li>El acceso de los empleados está limitado por diseño: no pueden ver, modificar ni eliminar configuración del negocio, datos de otros empleados, ni información financiera agregada</li>
+          <li>Las acciones irreversibles (eliminar datos del negocio, cambiar roles) requieren confirmación explícita y, en varios casos, están reservadas exclusivamente al administrador</li>
+          <li>Ante cualquier sospecha de acceso no autorizado, el administrador debe cambiar inmediatamente su contraseña y las de los empleados afectados</li>
+        </ul>`)
+    ),
+
+    sec('8','Ley y jurisdicción aplicable',
+      `<p>Estos Términos y Condiciones, así como el Aviso de Privacidad de esta plataforma, se rigen por las leyes de la <strong>República de Colombia</strong>. Para cualquier controversia derivada del uso de ClienteFlow Pro, las partes se someten a los tribunales competentes de Colombia, sin perjuicio de las normas de protección al consumidor o de datos personales que resulten aplicables en la jurisdicción del usuario final.</p>
+      <p style="margin-top:8px">Normativa de referencia:</p>
+      <ul style="margin:6px 0 0 20px;display:flex;flex-direction:column;gap:6px">
+        <li>${link('https://www.alcaldiabogota.gov.co/sisjur/normas/Norma1.jsp?i=49981','Ley 1581 de 2012')} — Régimen General de Protección de Datos Personales (Habeas Data)</li>
+        <li>${link('https://www.mintic.gov.co/portal/715/articles-2627_Resolucion_2239_de_2024.pdf','Resolución MinTIC 2239 de 2024')} — Política General de Seguridad y Privacidad de la Información, Seguridad Digital y Continuidad de la Operación</li>
+        <li>${link('https://www.mintic.gov.co/portal/715/articles-2627_Resolucion_2238_de_2024.pdf','Resolución MinTIC 2238 de 2024')} — Política de Tratamiento de Datos Personales</li>
+      </ul>
+      <p style="margin-top:10px;padding:10px;background:var(--surface);border-radius:8px;font-size:13px"><strong>Contacto general:</strong> para cualquier duda sobre estas políticas, escriba a ${link('mailto:julianrene113@gmail.com','julianrene113@gmail.com')}.</p>`
+    ),
+  ];
+
+  const target = document.getElementById('pol-body');
+  if(target) target.innerHTML = body.join('');
 }
 </script>
