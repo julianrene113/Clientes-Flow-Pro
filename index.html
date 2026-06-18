@@ -4013,3 +4013,487 @@ function renderPolBody(){
   if(target) target.innerHTML = body.join('');
 }
 </script>
+<script>
+// ═══════════════════════════════════════════════════════════
+//  FASE 0 — SISTEMA DE PLANES Y LÍMITES
+//  Pegar este bloque completo ANTES del cierre de </body>
+//  en tu index.html, después del último <script> existente.
+// ═══════════════════════════════════════════════════════════
+
+// ── CONSTANTES DE PLANES ────────────────────────────────────
+const PLANES = {
+  gratis: {
+    nombre: 'Plan Gratis',
+    maxClientes: 20,
+    maxVentasMes: 50,
+    precio: 0,
+  },
+  pro: {
+    nombre: 'Plan Pro',
+    maxClientes: Infinity,
+    maxVentasMes: Infinity,
+    precio: 29900, // COP
+  },
+};
+
+// ── ESTADO DEL PLAN (se carga al hacer login) ───────────────
+S.plan = {
+  tipo: 'gratis',
+  vence: null,
+  clientesUsados: 0,
+  ventasMes: 0,
+  ventasMesReset: '',
+};
+
+// ── CARGAR PLAN DESDE FIRESTORE ─────────────────────────────
+async function loadPlan() {
+  try {
+    const snap = await db.doc(`users/${S.uid}/plan/estado`).get();
+    if (snap.exists) {
+      const d = snap.data();
+      // Verificar si el plan Pro venció
+      if (d.tipo === 'pro' && d.vence) {
+        const venceDate = toDate(d.vence);
+        if (venceDate && venceDate < new Date()) {
+          // Plan vencido → degradar a gratis automáticamente
+          await db.doc(`users/${S.uid}/plan/estado`).update({
+            tipo: 'gratis',
+            vence: null,
+          });
+          d.tipo = 'gratis';
+          d.vence = null;
+          toast('Tu Plan Pro venció. Ahora estás en Plan Gratis.', 'warn');
+        }
+      }
+      // Resetear contador de ventas si cambió el mes
+      const mesActual = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+      if (d.ventasMesReset !== mesActual) {
+        await db.doc(`users/${S.uid}/plan/estado`).update({
+          ventasMes: 0,
+          ventasMesReset: mesActual,
+        });
+        d.ventasMes = 0;
+        d.ventasMesReset = mesActual;
+      }
+      S.plan = {
+        tipo: d.tipo || 'gratis',
+        vence: d.vence || null,
+        clientesUsados: d.clientesUsados || 0,
+        ventasMes: d.ventasMes || 0,
+        ventasMesReset: d.ventasMesReset || mesActual,
+      };
+    } else {
+      // Primera vez — crear documento de plan
+      const mesActual = new Date().toISOString().slice(0, 7);
+      const planInicial = {
+        tipo: 'gratis',
+        vence: null,
+        clientesUsados: 0,
+        ventasMes: 0,
+        ventasMesReset: mesActual,
+        creadoEn: firebase.firestore.Timestamp.now(),
+      };
+      await db.doc(`users/${S.uid}/plan/estado`).set(planInicial);
+      S.plan = { ...planInicial };
+    }
+  } catch (e) {
+    console.warn('loadPlan error:', e);
+  }
+}
+
+// ── VERIFICAR LÍMITES ────────────────────────────────────────
+
+// Retorna true si puede agregar cliente, false si está bloqueado
+function puedeAgregarCliente() {
+  if (S.plan.tipo === 'pro') return true;
+  const limite = PLANES.gratis.maxClientes;
+  const actual = S.clientes.length;
+  if (actual >= limite) {
+    mostrarModalUpgrade(
+      'cliente',
+      `Has alcanzado el límite de <strong>${limite} clientes</strong> en el Plan Gratis.`
+    );
+    return false;
+  }
+  return true;
+}
+
+// Retorna true si puede registrar venta, false si está bloqueado
+function puedeRegistrarVenta() {
+  if (S.plan.tipo === 'pro') return true;
+  const limite = PLANES.gratis.maxVentasMes;
+  if (S.plan.ventasMes >= limite) {
+    mostrarModalUpgrade(
+      'venta',
+      `Has alcanzado el límite de <strong>${limite} ventas este mes</strong> en el Plan Gratis.`
+    );
+    return false;
+  }
+  return true;
+}
+
+// ── INCREMENTAR CONTADORES TRAS ACCIONES ────────────────────
+
+async function registrarNuevoCliente() {
+  try {
+    await db.doc(`users/${S.uid}/plan/estado`).update({
+      clientesUsados: firebase.firestore.FieldValue.increment(1),
+    });
+    S.plan.clientesUsados++;
+  } catch (e) {
+    console.warn('registrarNuevoCliente error:', e);
+  }
+}
+
+async function registrarNuevaVenta() {
+  try {
+    await db.doc(`users/${S.uid}/plan/estado`).update({
+      ventasMes: firebase.firestore.FieldValue.increment(1),
+    });
+    S.plan.ventasMes++;
+  } catch (e) {
+    console.warn('registrarNuevaVenta error:', e);
+  }
+}
+
+// ── MODAL DE UPGRADE ─────────────────────────────────────────
+function mostrarModalUpgrade(contexto, mensaje) {
+  const venceStr = S.plan.vence
+    ? `Tu plan vence el ${fmtDate(S.plan.vence)}.`
+    : '';
+
+  showModal(`
+  <div class="modal-overlay">
+    <div class="modal" style="max-width:440px">
+      <div class="modal-header" style="border-bottom-color:var(--gold)">
+        <h2 style="color:var(--gold)">🚀 Actualiza tu plan</h2>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body" style="text-align:center;padding:28px 20px">
+        <div style="font-size:48px;margin-bottom:14px">🔒</div>
+        <p style="font-size:14px;margin-bottom:8px">${mensaje}</p>
+        <p style="font-size:13px;color:var(--text3);margin-bottom:20px">
+          Actualiza al <strong style="color:var(--gold)">Plan Pro</strong> para
+          clientes ilimitados, ventas ilimitadas y todas las funciones sin restricciones.
+          ${venceStr}
+        </p>
+
+        <div style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.25);border-radius:12px;padding:16px;margin-bottom:20px">
+          <div style="font-family:Syne,sans-serif;font-size:28px;font-weight:800;color:var(--gold)">
+            $29.900 <span style="font-size:14px;font-weight:400;color:var(--text3)">COP/mes</span>
+          </div>
+          <div style="font-size:12px;color:var(--text3);margin-top:4px">Sin contratos. Cancela cuando quieras.</div>
+          <ul style="text-align:left;margin:12px 0 0 16px;font-size:13px;color:var(--text2);display:flex;flex-direction:column;gap:5px">
+            <li>✅ Clientes ilimitados</li>
+            <li>✅ Ventas ilimitadas</li>
+            <li>✅ Todos los módulos</li>
+            <li>✅ Exportación de datos</li>
+            <li>✅ Soporte prioritario</li>
+          </ul>
+        </div>
+
+        <button class="btn btn-full" style="background:var(--gold);color:#04100a;font-weight:700;font-size:15px;padding:13px;border-radius:10px" onclick="closeModal();go('suscripcion')">
+          💳 Activar Plan Pro
+        </button>
+        <div style="margin-top:12px">
+          <span onclick="closeModal()" style="font-size:12.5px;color:var(--text3);cursor:pointer">Continuar con el plan gratis</span>
+        </div>
+      </div>
+    </div>
+  </div>`);
+}
+
+// ── PÁGINA DE SUSCRIPCIÓN ────────────────────────────────────
+// Agrega 'suscripcion' al objeto PAGE_TITLES
+PAGE_TITLES['suscripcion'] = 'Plan Pro';
+
+// Agrega al nav de la sidebar (después de que cargue el DOM)
+// Llama a esta función desde enterApp() o al final de tu init
+function injectPlanNavItem() {
+  const nav = document.querySelector('.sidebar-nav');
+  if (!nav || document.querySelector('[data-page="suscripcion"]')) return;
+
+  const div = document.createElement('div');
+  div.innerHTML = `
+    <div class="nav-section-label">Mi plan</div>
+    <div class="nav-item" data-page="suscripcion" onclick="go('suscripcion')">
+      <span class="ni">⭐</span>
+      <span class="nl" id="sb-plan-label">${S.plan.tipo === 'pro' ? 'Plan Pro ✓' : 'Actualizar plan'}</span>
+    </div>`;
+  nav.appendChild(div);
+
+  // Agregar al mobile nav si hay espacio
+  const mobileNav = document.getElementById('mobile-nav');
+  if (mobileNav) {
+    const btn = document.createElement('button');
+    btn.className = 'mn-item';
+    btn.dataset.mnpage = 'suscripcion';
+    btn.onclick = () => go('suscripcion');
+    btn.innerHTML = '<span class="mn-icon">⭐</span>Plan';
+    mobileNav.appendChild(btn);
+  }
+}
+
+function renderSuscripcion() {
+  const c = document.getElementById('content');
+  const esPro = S.plan.tipo === 'pro';
+  const venceStr = S.plan.vence ? fmtDate(S.plan.vence) : null;
+
+  // Calcular uso actual
+  const clientesActuales = S.clientes.length;
+  const limiteCli = esPro ? '∞' : PLANES.gratis.maxClientes;
+  const limiteVen = esPro ? '∞' : PLANES.gratis.maxVentasMes;
+  const pctCli = esPro ? 0 : Math.min(100, (clientesActuales / PLANES.gratis.maxClientes) * 100);
+  const pctVen = esPro ? 0 : Math.min(100, (S.plan.ventasMes / PLANES.gratis.maxVentasMes) * 100);
+
+  c.innerHTML = `
+  <div class="page-header"><h2>⭐ Mi Plan</h2></div>
+
+  <!-- Plan actual -->
+  <div class="card mb-4" style="border-color:${esPro ? 'var(--gold)' : 'var(--border)'}">
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <div style="font-size:48px">${esPro ? '👑' : '🆓'}</div>
+      <div style="flex:1">
+        <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:${esPro ? 'var(--gold)' : 'var(--text)'}">${esPro ? 'Plan Pro' : 'Plan Gratis'}</div>
+        <div style="font-size:13px;color:var(--text3);margin-top:3px">
+          ${esPro
+            ? (venceStr ? `Vence el <strong style="color:var(--gold)">${venceStr}</strong>` : 'Sin fecha de vencimiento registrada')
+            : 'Versión gratuita con funciones limitadas'}
+        </div>
+      </div>
+      ${esPro ? `<span class="badge badge-gold" style="font-size:14px;padding:6px 14px">✓ Activo</span>` : ''}
+    </div>
+  </div>
+
+  <!-- Uso actual (solo en gratis) -->
+  ${!esPro ? `
+  <div class="card mb-4">
+    <h3 style="font-size:14px;margin-bottom:14px">📊 Uso del plan</h3>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px">
+          <span>👥 Clientes</span>
+          <span style="color:${pctCli>=100?'var(--red)':'var(--text2)'}"><strong>${clientesActuales}</strong> / ${limiteCli}</span>
+        </div>
+        <div style="height:8px;background:var(--surface);border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${pctCli}%;background:${pctCli>=100?'var(--red)':pctCli>=80?'var(--gold)':'var(--accent)'};border-radius:4px;transition:width .3s"></div>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px">
+          <span>💰 Ventas este mes</span>
+          <span style="color:${pctVen>=100?'var(--red)':'var(--text2)'}"><strong>${S.plan.ventasMes}</strong> / ${limiteVen}</span>
+        </div>
+        <div style="height:8px;background:var(--surface);border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${pctVen}%;background:${pctVen>=100?'var(--red)':pctVen>=80?'var(--gold)':'var(--accent)'};border-radius:4px;transition:width .3s"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  ` : ''}
+
+  <!-- Comparativa de planes -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px">
+    <!-- Plan Gratis -->
+    <div class="card" style="border-color:${!esPro?'var(--accent)':'var(--border)'}">
+      <div style="font-family:Syne,sans-serif;font-size:17px;font-weight:700;margin-bottom:4px">Gratis</div>
+      <div style="font-size:22px;font-weight:800;margin-bottom:12px">$0</div>
+      <div style="display:flex;flex-direction:column;gap:7px;font-size:13px;color:var(--text2)">
+        <div>✅ 20 clientes máximo</div>
+        <div>✅ 50 ventas/mes</div>
+        <div>✅ POS, Agenda, Catálogo</div>
+        <div style="color:var(--text3)">❌ Sin reportes avanzados</div>
+        <div style="color:var(--text3)">❌ Sin exportación</div>
+        <div style="color:var(--text3)">❌ Sin múltiples empleados</div>
+      </div>
+      ${!esPro ? `<div style="margin-top:14px;padding:8px;background:rgba(74,222,128,.1);border-radius:8px;text-align:center;font-size:12.5px;color:var(--accent);font-weight:600">Plan actual</div>` : ''}
+    </div>
+
+    <!-- Plan Pro -->
+    <div class="card" style="border-color:var(--gold);background:rgba(251,191,36,.03)">
+      <div style="font-family:Syne,sans-serif;font-size:17px;font-weight:700;color:var(--gold);margin-bottom:4px">Pro 👑</div>
+      <div style="font-size:22px;font-weight:800;margin-bottom:4px;color:var(--gold)">$29.900</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:12px">COP / mes</div>
+      <div style="display:flex;flex-direction:column;gap:7px;font-size:13px;color:var(--text2)">
+        <div>✅ Clientes ilimitados</div>
+        <div>✅ Ventas ilimitadas</div>
+        <div>✅ Todos los módulos</div>
+        <div>✅ Reportes completos</div>
+        <div>✅ Exportación de datos</div>
+        <div>✅ Múltiples empleados</div>
+      </div>
+      ${esPro
+        ? `<div style="margin-top:14px;padding:8px;background:rgba(251,191,36,.15);border-radius:8px;text-align:center;font-size:12.5px;color:var(--gold);font-weight:600">✓ Plan activo</div>`
+        : `<button class="btn btn-full" style="margin-top:14px;background:var(--gold);color:#04100a;font-weight:700" onclick="iniciarPagoWompi()">💳 Activar ahora</button>`
+      }
+    </div>
+  </div>
+
+  <!-- Botón de pago Wompi -->
+  ${!esPro ? `
+  <div class="card" style="border-color:rgba(251,191,36,.3);text-align:center;padding:28px">
+    <div style="font-size:36px;margin-bottom:12px">💳</div>
+    <h3 style="font-family:Syne,sans-serif;font-size:18px;font-weight:700;margin-bottom:8px">Activa el Plan Pro hoy</h3>
+    <p style="font-size:13.5px;color:var(--text3);margin-bottom:20px;max-width:360px;margin-left:auto;margin-right:auto">
+      Pago seguro con Wompi. Acepta tarjetas, PSE, Nequi y efectivo.<br>
+      Tu plan se activa automáticamente al confirmar el pago.
+    </p>
+    <div id="wompi-btn-container">
+      <!-- El botón de Wompi se inyecta aquí -->
+      <button class="btn btn-full" style="background:var(--gold);color:#04100a;font-weight:700;font-size:16px;padding:14px;border-radius:10px;max-width:320px;margin:0 auto" onclick="iniciarPagoWompi()">
+        🚀 Activar Plan Pro — $29.900/mes
+      </button>
+    </div>
+    <p style="font-size:11.5px;color:var(--text3);margin-top:12px">
+      🔒 Pago procesado por Wompi (Bancolombia) · Sin contratos · Cancela cuando quieras
+    </p>
+  </div>
+  ` : `
+  <div class="card" style="text-align:center;padding:20px;border-color:rgba(248,113,113,.2)">
+    <h3 style="font-size:14px;margin-bottom:8px;color:var(--text3)">¿Quieres cancelar tu plan?</h3>
+    <p style="font-size:13px;color:var(--text3);margin-bottom:14px">Tu plan seguirá activo hasta la fecha de vencimiento. Después pasarás al plan gratis automáticamente.</p>
+    <a href="mailto:julianrene113@gmail.com?subject=Cancelar Plan Pro ClienteFlow" class="btn btn-ghost btn-sm">Solicitar cancelación</a>
+  </div>
+  `}`;
+}
+
+// ── FUNCIÓN DE PAGO WOMPI ────────────────────────────────────
+// IMPORTANTE: Reemplaza WOMPI_PUBLIC_KEY con tu llave pública real
+// de Wompi (la encuentras en tu dashboard de Wompi → Llaves de API)
+const WOMPI_PUBLIC_KEY = 'pub_test_67AjFQoHxhGAhArBJO6kKE7KQmD6O01f'; // ← CAMBIAR
+
+function iniciarPagoWompi() {
+  // Genera una referencia única por negocio + timestamp
+  const referencia = `CFP-PRO-${S.uid.slice(0, 8)}-${Date.now()}`;
+  const monto = 2990000; // En centavos COP ($29.900)
+
+  // Guardar referencia pendiente en Firestore para validar después
+  db.doc(`users/${S.uid}/plan/pago_pendiente`).set({
+    referencia,
+    monto,
+    plan: 'pro',
+    creadoEn: firebase.firestore.Timestamp.now(),
+    estado: 'iniciado',
+  }).then(() => {
+    // Construir URL del checkout de Wompi
+    const params = new URLSearchParams({
+      'public-key': WOMPI_PUBLIC_KEY,
+      currency: 'COP',
+      'amount-in-cents': monto,
+      reference: referencia,
+      'redirect-url': window.location.href + '?pago=ok&ref=' + referencia,
+    });
+    window.location.href = `https://checkout.wompi.co/p/?${params.toString()}`;
+  }).catch(e => {
+    toast('Error al iniciar el pago: ' + e.message, 'error');
+  });
+}
+
+// ── VERIFICAR PAGO AL VOLVER DE WOMPI ───────────────────────
+async function verificarPagoWompi() {
+  const params = new URLSearchParams(window.location.search);
+  const pagoOk = params.get('pago');
+  const ref = params.get('ref');
+  if (!pagoOk || !ref) return;
+
+  // Limpiar la URL para que no quede el parámetro visible
+  window.history.replaceState({}, '', window.location.pathname);
+
+  toast('Verificando tu pago…', 'info');
+
+  try {
+    // Consultar el estado de la transacción directamente a la API de Wompi
+    const res = await fetch(`https://production.wompi.co/v1/transactions?reference=${ref}`);
+    const data = await res.json();
+    const tx = data?.data?.[0];
+
+    if (tx && tx.status === 'APPROVED') {
+      // Calcular fecha de vencimiento: 1 mes desde hoy
+      const vence = new Date();
+      vence.setMonth(vence.getMonth() + 1);
+
+      await db.doc(`users/${S.uid}/plan/estado`).update({
+        tipo: 'pro',
+        vence: firebase.firestore.Timestamp.fromDate(vence),
+        activadoEn: firebase.firestore.Timestamp.now(),
+        ultimaRef: ref,
+      });
+
+      S.plan.tipo = 'pro';
+      S.plan.vence = firebase.firestore.Timestamp.fromDate(vence);
+
+      // Actualizar label del sidebar
+      const lbl = document.getElementById('sb-plan-label');
+      if (lbl) lbl.textContent = 'Plan Pro ✓';
+
+      toast('🎉 ¡Plan Pro activado! Válido hasta el ' + fmtDate(firebase.firestore.Timestamp.fromDate(vence)));
+      go('suscripcion');
+    } else {
+      toast('El pago no fue aprobado. Estado: ' + (tx?.status || 'desconocido'), 'warn');
+    }
+  } catch (e) {
+    console.error('verificarPago error:', e);
+    toast('No se pudo verificar el pago automáticamente. Contacta soporte.', 'warn');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MODIFICACIONES A FUNCIONES EXISTENTES
+//  Estas líneas REEMPLAZAN las funciones originales para
+//  inyectar la verificación de límites.
+// ═══════════════════════════════════════════════════════════
+
+// ── PATCH: saveClient ────────────────────────────────────────
+// Agrega la verificación de límite ANTES de guardar un cliente nuevo
+const _saveClient_original = saveClient;
+saveClient = async function(id) {
+  if (!id) {
+    // Es un cliente NUEVO — verificar límite
+    if (!puedeAgregarCliente()) return;
+  }
+  await _saveClient_original(id);
+  if (!id) {
+    // Incrementar contador solo si fue exitoso (la función original hace toast)
+    await registrarNuevoCliente();
+  }
+};
+
+// ── PATCH: confirmarVenta ────────────────────────────────────
+// Agrega la verificación de límite ANTES de registrar la venta
+const _confirmarVenta_original = confirmarVenta;
+confirmarVenta = async function() {
+  if (!puedeRegistrarVenta()) return;
+  await _confirmarVenta_original();
+  await registrarNuevaVenta();
+};
+
+// ── PATCH: enterApp ──────────────────────────────────────────
+// Carga el plan al entrar y verifica pago de retorno de Wompi
+const _enterApp_original = enterApp;
+enterApp = async function() {
+  _enterApp_original();
+  await loadPlan();
+  injectPlanNavItem();
+  await verificarPagoWompi();
+};
+
+// ── PATCH: go() para la nueva página ────────────────────────
+const _go_original = go;
+go = function(page, params = {}) {
+  if (page === 'suscripcion') {
+    stopListeners();
+    S.page = page;
+    document.querySelectorAll('.nav-item[data-page]').forEach(el =>
+      el.classList.toggle('active', el.dataset.page === page));
+    document.getElementById('page-title').textContent = 'Mi Plan';
+    closeSidebar();
+    // Cargar clientes antes de renderizar para tener el conteo
+    listen('clientes', 'clientes', () => {});
+    setTimeout(renderSuscripcion, 100);
+    return;
+  }
+  _go_original(page, params);
+};
+</script>
+</body>
+</html>
