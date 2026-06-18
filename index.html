@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ClienteFlow Pro — CRM + POS para tu negocio</title>
+<meta name="description" content="Gestiona clientes, ventas, agenda e inventario desde un solo lugar. Diseñado para salones, tiendas y negocios en Colombia."/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:#080f0a;color:#ecfdf0;font-family:'DM Sans',sans-serif;font-size:16px;line-height:1.6;overflow-x:hidden}
+h1,h2,h3{font-family:'Syne',sans-serif}
+:root{--green:#4ade80;--gold:#fbbf24;--bg:#080f0a;--surface:#0d1a10;--card:#122016;--border:#1e3424;--text:#ecfdf0;--text2:#9db8a2;--text3:#4a6a50}
+
+/* NAV */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:16px 5vw;background:rgba(8,15,10,0.9);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
+.nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+.nav-logo .icon{width:36px;height:36px;background:linear-gradient(135deg,#4ade80,#15803d);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.nav-logo span{font-family:'Syne',sans-serif;font-weight:700;font-size:15px;color:#ecfdf0}
+.nav-links{display:flex;align-items:center;gap:24px}
+.nav-links a{color:#9db8a2;text-decoration:none;font-size:14px;font-weight:500;transition:color .15s}
+.nav-links a:hover{color:#4ade80}
+.nav-cta{background:#4ade80!important;color:#04100a!important;padding:9px 20px;border-radius:8px;font-weight:700!important}
+.nav-cta:hover{background:#6ee7a0!important}
+.ham{display:none;background:none;border:1px solid var(--border);color:#ecfdf0;padding:7px 11px;border-radius:7px;cursor:pointer;font-size:16px}
+
+/* HERO */
+.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:120px 5vw 80px;text-align:center;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 30%,rgba(74,222,128,0.07) 0%,transparent 70%);pointer-events:none}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.25);border-radius:20px;padding:5px 14px;font-size:12px;font-weight:600;color:#4ade80;margin-bottom:28px;letter-spacing:.04em;text-transform:uppercase}
+.hero h1{font-size:clamp(38px,7vw,78px);font-weight:800;line-height:1.04;margin-bottom:22px;max-width:820px;letter-spacing:-.02em}
+.hero h1 em{font-style:normal;color:#4ade80}
+.hero-sub{font-size:clamp(16px,2vw,19px);color:#9db8a2;max-width:540px;margin:0 auto 40px;line-height:1.65}
+.ctas{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:56px}
+.btn-p{background:#4ade80;color:#04100a;padding:14px 32px;border-radius:10px;font-weight:700;font-size:16px;text-decoration:none;transition:all .15s;display:inline-flex;align-items:center;gap:8px}
+.btn-p:hover{background:#6ee7a0;transform:translateY(-1px)}
+.btn-g{background:transparent;color:#ecfdf0;padding:14px 32px;border-radius:10px;font-weight:600;font-size:16px;text-decoration:none;border:1px solid #1e3424;transition:all .15s}
+.btn-g:hover{border-color:#4ade80;color:#4ade80}
+
+/* MOCKUP */
+.mockup{width:100%;max-width:880px;margin:0 auto;background:#0d1a10;border:1px solid #1e3424;border-radius:16px;overflow:hidden;box-shadow:0 40px 100px rgba(0,0,0,.55)}
+.mock-bar{display:flex;align-items:center;gap:8px;padding:11px 16px;background:#122016;border-bottom:1px solid #1e3424}
+.dot{width:11px;height:11px;border-radius:50%;display:inline-block;margin-right:4px}
+.mock-url{flex:1;background:#0d1a10;border-radius:5px;padding:4px 10px;font-size:11px;color:#4a6a50;text-align:center}
+.mock-body{display:flex;min-height:300px}
+.mock-sb{width:175px;flex-shrink:0;border-right:1px solid #1e3424;padding:10px 8px}
+.mock-sb .mlogo{display:flex;align-items:center;gap:7px;padding:8px;margin-bottom:8px}
+.mock-sb .mli{width:26px;height:26px;background:linear-gradient(135deg,#4ade80,#16a34a);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px}
+.mock-sb .mln{font-family:Syne,sans-serif;font-weight:700;font-size:11px}
+.mnav{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;font-size:11.5px;color:#9db8a2}
+.mnav.on{background:rgba(74,222,128,.1);color:#4ade80}
+.mock-main{flex:1;padding:14px;display:flex;flex-direction:column;gap:10px}
+.mstats{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.ms{background:#122016;border:1px solid #1e3424;border-radius:8px;padding:9px}
+.ms .msl{font-size:9.5px;color:#4a6a50;margin-bottom:3px}
+.ms .msv{font-family:Syne,sans-serif;font-size:15px;font-weight:700;color:#4ade80}
+.mchart{background:#122016;border:1px solid #1e3424;border-radius:8px;padding:11px;flex:1}
+.mchart .mct{font-size:10px;color:#4a6a50;margin-bottom:8px}
+.mbars{display:flex;align-items:flex-end;gap:5px;height:55px}
+.mb{flex:1;border-radius:3px 3px 0 0;background:rgba(74,222,128,.2);border-top:2px solid rgba(74,222,128,.5)}
+
+/* STATS BAND */
+.sband{background:#0d1a10;border-top:1px solid #1e3424;border-bottom:1px solid #1e3424;padding:48px 5vw}
+.sband-inner{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:28px;max-width:860px;margin:0 auto;text-align:center}
+.sitem .sv{font-family:Syne,sans-serif;font-size:40px;font-weight:800;color:#4ade80;line-height:1}
+.sitem .sl{font-size:13px;color:#4a6a50;margin-top:5px}
+
+/* SECCIONES */
+section{padding:88px 5vw}
+.slabel{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#4ade80;margin-bottom:12px}
+.stitle{font-size:clamp(26px,4vw,44px);font-weight:800;line-height:1.1;margin-bottom:14px;letter-spacing:-.02em}
+.ssub{font-size:16px;color:#9db8a2;max-width:480px;line-height:1.65}
+
+/* FEATURES */
+.fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:18px;max-width:1080px;margin:52px auto 0}
+.fc{background:#122016;border:1px solid #1e3424;border-radius:14px;padding:26px;transition:border-color .2s,transform .2s;position:relative;overflow:hidden}
+.fc::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#4ade80,transparent);opacity:0;transition:opacity .2s}
+.fc:hover{border-color:rgba(74,222,128,.4);transform:translateY(-2px)}
+.fc:hover::before{opacity:1}
+.fc-icon{font-size:30px;margin-bottom:12px;display:block}
+.fc-title{font-family:Syne,sans-serif;font-size:16px;font-weight:700;margin-bottom:7px}
+.fc-desc{font-size:13.5px;color:#9db8a2;line-height:1.6}
+
+/* CÓMO FUNCIONA */
+.how-wrap{max-width:860px;margin:52px auto 0;position:relative}
+.how-line{position:absolute;left:26px;top:27px;bottom:27px;width:2px;background:linear-gradient(180deg,#4ade80,rgba(74,222,128,0));opacity:.25}
+.hstep{display:flex;gap:22px;margin-bottom:34px;align-items:flex-start}
+.hnum{width:52px;height:52px;flex-shrink:0;background:#0d1a10;border:2px solid #1e3424;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:Syne,sans-serif;font-size:17px;font-weight:800;color:#4ade80;position:relative;z-index:1}
+.hcontent{padding-top:10px}
+.hcontent h3{font-family:Syne,sans-serif;font-size:17px;font-weight:700;margin-bottom:5px}
+.hcontent p{font-size:14px;color:#9db8a2;line-height:1.65;max-width:500px}
+
+/* NEGOCIOS */
+.ngrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;max-width:860px;margin:44px auto 0;text-align:center}
+.ncard{background:#122016;border:1px solid #1e3424;border-radius:12px;padding:18px 10px}
+.ncard .ne{font-size:26px;margin-bottom:7px}
+.ncard .nn{font-size:12px;color:#9db8a2;font-weight:500;line-height:1.3}
+
+/* PRECIOS */
+.pgrid{display:grid;grid-template-columns:1fr 1fr;gap:18px;max-width:720px;margin:52px auto 0}
+.pcard{background:#122016;border:1px solid #1e3424;border-radius:16px;padding:30px}
+.pcard.feat{border-color:#fbbf24;background:linear-gradient(135deg,rgba(251,191,36,.04),#122016);position:relative;overflow:hidden}
+.pcard.feat::after{content:'MÁS POPULAR';position:absolute;top:14px;right:-24px;background:#fbbf24;color:#04100a;font-size:9px;font-weight:800;letter-spacing:.07em;padding:4px 34px;transform:rotate(35deg)}
+.pcname{font-family:Syne,sans-serif;font-size:13px;font-weight:700;color:#4a6a50;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px}
+.pcprice{font-family:Syne,sans-serif;font-size:38px;font-weight:800;line-height:1;margin-bottom:3px}
+.pcper{font-size:13px;color:#4a6a50;margin-bottom:22px}
+.pcfeats{display:flex;flex-direction:column;gap:8px;margin-bottom:26px}
+.pcf{display:flex;align-items:flex-start;gap:8px;font-size:13px;color:#9db8a2}
+.pcf .ck{color:#4ade80;flex-shrink:0}
+.pcf .cx{color:#4a6a50;flex-shrink:0}
+.pcf.dim{color:#4a6a50}
+.btnplan{display:block;width:100%;padding:12px;border-radius:9px;font-family:'DM Sans',sans-serif;font-weight:700;font-size:15px;text-align:center;text-decoration:none;cursor:pointer;border:none;transition:all .15s}
+.btnplan-ghost{background:transparent;color:#9db8a2;border:1px solid #1e3424}
+.btnplan-ghost:hover{border-color:#9db8a2;color:#ecfdf0}
+.btnplan-gold{background:#fbbf24;color:#04100a}
+.btnplan-gold:hover{background:#fcd34d;transform:translateY(-1px)}
+
+/* TESTIMONIOS */
+.tgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;max-width:960px;margin:44px auto 0}
+.tcard{background:#122016;border:1px solid #1e3424;border-radius:14px;padding:22px}
+.tstars{color:#fbbf24;font-size:13px;margin-bottom:10px}
+.tbody{font-size:13.5px;color:#9db8a2;line-height:1.65;margin-bottom:14px;font-style:italic}
+.tauthor{display:flex;align-items:center;gap:10px}
+.tav{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#04100a;flex-shrink:0}
+.tname{font-size:13px;font-weight:600}
+.tbiz{font-size:11px;color:#4a6a50}
+
+/* FAQ */
+.faq-item{background:#122016;border:1px solid #1e3424;border-radius:10px;overflow:hidden;margin-bottom:8px}
+.faq-q{width:100%;display:flex;justify-content:space-between;align-items:center;padding:15px 18px;background:none;border:none;color:#ecfdf0;font-family:'DM Sans',sans-serif;font-size:14.5px;font-weight:600;cursor:pointer;text-align:left;gap:12px}
+.faq-a{display:none;padding:0 18px 15px;font-size:13.5px;color:#9db8a2;line-height:1.65}
+.faq-a.open{display:block}
+.farrow{font-size:18px;transition:transform .2s;flex-shrink:0;color:#4a6a50}
+
+/* CTA FINAL */
+.ctafinal{background:#0d1a10;border-top:1px solid #1e3424;border-bottom:1px solid #1e3424;text-align:center;padding:88px 5vw}
+.ctafinal h2{font-size:clamp(26px,4vw,48px);font-weight:800;letter-spacing:-.02em;margin-bottom:14px}
+.ctafinal p{font-size:16px;color:#9db8a2;margin-bottom:34px}
+
+/* FOOTER */
+footer{padding:48px 5vw 28px;border-top:1px solid #1e3424}
+.footer-inner{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:28px;max-width:1080px;margin:0 auto}
+.fbrand p{font-size:13px;color:#4a6a50;max-width:210px;line-height:1.6;margin-top:6px}
+.flinks h4{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#4a6a50;margin-bottom:10px}
+.flinks a{display:block;color:#9db8a2;text-decoration:none;font-size:13px;margin-bottom:7px;transition:color .15s}
+.flinks a:hover{color:#4ade80}
+.fbot{border-top:1px solid #1e3424;padding-top:22px;margin-top:44px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;font-size:12px;color:#4a6a50;max-width:1080px;margin-left:auto;margin-right:auto}
+
+@media(max-width:768px){
+  .nav-links{display:none;position:fixed;top:65px;left:0;right:0;background:#0d1a10;border-bottom:1px solid #1e3424;padding:18px 5vw;flex-direction:column;gap:14px;z-index:99}
+  .nav-links.open{display:flex}
+  .ham{display:block}
+  .mock-sb{display:none}
+  .mstats{grid-template-columns:1fr 1fr}
+  .pgrid{grid-template-columns:1fr}
+  .pcard.feat::after{display:none}
+  .how-line{display:none}
+  .footer-inner{flex-direction:column}
+  .fbot{flex-direction:column;text-align:center}
+  .how-wrap-right{display:none}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="#" class="nav-logo">
+    <div class="icon">🌿</div>
+    <span>ClienteFlow Pro</span>
+  </a>
+  <div class="nav-links" id="navlinks">
+    <a href="#funciones">Funciones</a>
+    <a href="#como-funciona">Cómo funciona</a>
+    <a href="#precios">Precios</a>
+    <a href="app.html">Acceder</a>
+    <a href="#precios" class="nav-cta">Empezar gratis</a>
+  </div>
+  <button class="ham" onclick="document.getElementById('navlinks').classList.toggle('open')">☰</button>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="inicio">
+  <div class="eyebrow">🇨🇴 Hecho para negocios colombianos</div>
+  <h1>Tu negocio,<br><em>organizado</em><br>desde un solo lugar</h1>
+  <p class="hero-sub">CRM + Punto de Venta + Agenda + Inventario. Todo lo que necesitas para gestionar clientes, cobrar y crecer — sin Excel, sin papel.</p>
+  <div class="ctas">
+    <a href="app.html" class="btn-p">🚀 Empezar gratis</a>
+    <a href="#como-funciona" class="btn-g">Ver cómo funciona →</a>
+  </div>
+  <div class="mockup">
+    <div class="mock-bar">
+      <span class="dot" style="background:#f87171"></span>
+      <span class="dot" style="background:#fbbf24"></span>
+      <span class="dot" style="background:#4ade80"></span>
+      <div class="mock-url">julianrene113.github.io/Clientes-Flow-Pro/app.html</div>
+    </div>
+    <div class="mock-body">
+      <div class="mock-sb">
+        <div class="mlogo">
+          <div class="mli">🌿</div>
+          <span class="mln">ClienteFlow</span>
+        </div>
+        <div class="mnav on">📊 Dashboard</div>
+        <div class="mnav">🛒 POS</div>
+        <div class="mnav">👥 Clientes</div>
+        <div class="mnav">📅 Agenda</div>
+        <div class="mnav">📦 Catálogo</div>
+        <div class="mnav">💰 Ventas</div>
+        <div class="mnav">📈 Reportes</div>
+      </div>
+      <div class="mock-main">
+        <div class="mstats">
+          <div class="ms"><div class="msl">Ingresos del mes</div><div class="msv">$1.24M</div></div>
+          <div class="ms"><div class="msl">Clientes activos</div><div class="msv">47</div></div>
+          <div class="ms"><div class="msl">Citas hoy</div><div class="msv">6</div></div>
+          <div class="ms"><div class="msl">Por cobrar</div><div class="msv" style="color:#fbbf24">$89k</div></div>
+        </div>
+        <div class="mchart">
+          <div class="mct">Ingresos últimos 6 meses</div>
+          <div class="mbars">
+            <div class="mb" style="height:35%"></div>
+            <div class="mb" style="height:55%"></div>
+            <div class="mb" style="height:42%"></div>
+            <div class="mb" style="height:70%"></div>
+            <div class="mb" style="height:58%"></div>
+            <div class="mb" style="height:100%;background:rgba(74,222,128,.45);border-top-color:#4ade80"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- STATS -->
+<div class="sband">
+  <div class="sband-inner">
+    <div class="sitem"><div class="sv">100%</div><div class="sl">Gratis para empezar</div></div>
+    <div class="sitem"><div class="sv">0</div><div class="sl">Instalaciones necesarias</div></div>
+    <div class="sitem"><div class="sv">10+</div><div class="sl">Módulos integrados</div></div>
+    <div class="sitem"><div class="sv">24/7</div><div class="sl">Disponible desde cualquier dispositivo</div></div>
+  </div>
+</div>
+
+<!-- FUNCIONES -->
+<section id="funciones">
+  <div style="text-align:center;max-width:580px;margin:0 auto">
+    <div class="slabel">Funciones</div>
+    <h2 class="stitle">Todo lo que tu negocio necesita</h2>
+    <p class="ssub" style="margin:0 auto">Sin apps separadas, sin integraciones complicadas. Un solo sistema que crece contigo.</p>
+  </div>
+  <div class="fgrid">
+    <div class="fc"><span class="fc-icon">👥</span><div class="fc-title">CRM de Clientes</div><p class="fc-desc">Perfil completo por cliente: historial de compras, citas, pagos pendientes, cumpleaños y etiquetas VIP o Frecuente.</p></div>
+    <div class="fc"><span class="fc-icon">🛒</span><div class="fc-title">Punto de Venta (POS)</div><p class="fc-desc">Cobra servicios y productos en segundos. Escanea códigos de barra, acepta efectivo, tarjeta o transferencia.</p></div>
+    <div class="fc"><span class="fc-icon">📅</span><div class="fc-title">Agenda inteligente</div><p class="fc-desc">Calendario mensual con citas por cliente. Recordatorios automáticos por WhatsApp para reducir inasistencias.</p></div>
+    <div class="fc"><span class="fc-icon">📦</span><div class="fc-title">Catálogo e Inventario</div><p class="fc-desc">Controla el stock en tiempo real. Alertas cuando el inventario baja y registro de cada movimiento.</p></div>
+    <div class="fc"><span class="fc-icon">📈</span><div class="fc-title">Reportes y gráficas</div><p class="fc-desc">Ingresos por mes, servicios más vendidos, ranking de empleados — todo con gráficas listas para compartir.</p></div>
+    <div class="fc"><span class="fc-icon">💬</span><div class="fc-title">WhatsApp integrado</div><p class="fc-desc">Envía cobros, recordatorios de cita y felicitaciones de cumpleaños con un clic, directo a WhatsApp.</p></div>
+    <div class="fc"><span class="fc-icon">👤</span><div class="fc-title">Multi-empleados y roles</div><p class="fc-desc">Administrador ve todo; empleado solo su POS y sus ventas. Acceso diferenciado por persona.</p></div>
+    <div class="fc"><span class="fc-icon">⬇️</span><div class="fc-title">Exportación de datos</div><p class="fc-desc">Descarga clientes, ventas y pagos en CSV. Backup completo en JSON. Tus datos siempre son tuyos.</p></div>
+    <div class="fc"><span class="fc-icon">📱</span><div class="fc-title">Funciona en el celular</div><p class="fc-desc">Diseño responsive para móvil. Cobra desde el celular, revisa la agenda en cualquier parte — sin instalar nada.</p></div>
+  </div>
+</section>
+
+<!-- CÓMO FUNCIONA -->
+<section id="como-funciona" style="background:#0d1a10;border-top:1px solid #1e3424;border-bottom:1px solid #1e3424">
+  <div style="max-width:1060px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center">
+    <div>
+      <div class="slabel">Cómo funciona</div>
+      <h2 class="stitle">Listo en menos de 5 minutos</h2>
+      <p class="ssub">Sin instalaciones, sin tarjeta de crédito, sin configuraciones complicadas.</p>
+      <div class="how-wrap">
+        <div class="how-line"></div>
+        <div class="hstep">
+          <div class="hnum">1</div>
+          <div class="hcontent"><h3>Crea tu cuenta gratis</h3><p>Entra a la app, registra tu correo y el nombre de tu negocio. En 30 segundos ya tienes acceso completo.</p></div>
+        </div>
+        <div class="hstep">
+          <div class="hnum">2</div>
+          <div class="hcontent"><h3>Agrega productos y servicios</h3><p>Crea tu catálogo con precios y stock. Puedes escanear códigos de barra desde el celular.</p></div>
+        </div>
+        <div class="hstep">
+          <div class="hnum">3</div>
+          <div class="hcontent"><h3>Empieza a cobrar y gestionar</h3><p>Registra clientes, agenda citas y cobra desde el POS. Todo se guarda automáticamente en la nube.</p></div>
+        </div>
+        <div class="hstep">
+          <div class="hnum">4</div>
+          <div class="hcontent"><h3>Mira crecer tu negocio</h3><p>Los reportes muestran qué funciona. Identifica tus mejores clientes, servicios y empleados de un vistazo.</p></div>
+        </div>
+      </div>
+    </div>
+    <div class="how-wrap-right" style="display:flex;flex-direction:column;gap:12px">
+      <div style="background:#122016;border:1px solid #1e3424;border-radius:14px;padding:18px">
+        <div style="font-size:10px;color:#4a6a50;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">📅 Citas de hoy</div>
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #1e3424"><div style="width:8px;height:8px;border-radius:50%;background:#4ade80;flex-shrink:0"></div><span style="font-size:12.5px">09:00 — María García · Corte y color</span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #1e3424"><div style="width:8px;height:8px;border-radius:50%;background:rgba(74,222,128,.3);flex-shrink:0"></div><span style="font-size:12.5px">10:30 — Carlos Ruiz · Manicure</span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #1e3424"><div style="width:8px;height:8px;border-radius:50%;background:#fbbf24;flex-shrink:0"></div><span style="font-size:12.5px">12:00 — Ana Torres · Masaje</span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0"><div style="width:8px;height:8px;border-radius:50%;background:rgba(74,222,128,.3);flex-shrink:0"></div><span style="font-size:12.5px">15:00 — Luis Pérez · Corte</span></div>
+      </div>
+      <div style="background:#122016;border:1px solid rgba(74,222,128,.3);border-radius:14px;padding:18px">
+        <div style="font-size:10px;color:#4a6a50;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">💳 Última venta</div>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div><div style="font-size:14px;font-weight:700">María García</div><div style="font-size:11.5px;color:#4a6a50">Corte + Keratina · Tarjeta</div></div>
+          <div style="font-family:Syne,sans-serif;font-size:20px;font-weight:800;color:#4ade80">$95k</div>
+        </div>
+      </div>
+      <div style="background:#122016;border:1px solid #1e3424;border-radius:14px;padding:18px">
+        <div style="font-size:10px;color:#4a6a50;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📊 Ingresos del mes</div>
+        <div style="font-family:Syne,sans-serif;font-size:30px;font-weight:800;color:#4ade80">$2.840.000</div>
+        <div style="font-size:12px;color:#4a6a50;margin-top:3px">+18% vs mes anterior ↑</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PARA QUIÉN ES -->
+<section>
+  <div style="text-align:center;max-width:580px;margin:0 auto">
+    <div class="slabel">Para quién es</div>
+    <h2 class="stitle">Ideal para negocios de servicios</h2>
+  </div>
+  <div class="ngrid">
+    <div class="ncard"><div class="ne">💇</div><div class="nn">Salones de belleza</div></div>
+    <div class="ncard"><div class="ne">💅</div><div class="nn">Centros de estética</div></div>
+    <div class="ncard"><div class="ne">🏋️</div><div class="nn">Gimnasios</div></div>
+    <div class="ncard"><div class="ne">🐾</div><div class="nn">Veterinarias</div></div>
+    <div class="ncard"><div class="ne">👗</div><div class="nn">Boutiques</div></div>
+    <div class="ncard"><div class="ne">🍰</div><div class="nn">Panaderías</div></div>
+    <div class="ncard"><div class="ne">🔧</div><div class="nn">Talleres</div></div>
+    <div class="ncard"><div class="ne">📚</div><div class="nn">Academias</div></div>
+    <div class="ncard"><div class="ne">💊</div><div class="nn">Droguerías</div></div>
+    <div class="ncard"><div class="ne">🌿</div><div class="nn">Spas</div></div>
+    <div class="ncard"><div class="ne">👟</div><div class="nn">Tiendas de ropa</div></div>
+    <div class="ncard"><div class="ne">🎨</div><div class="nn">Estudios creativos</div></div>
+  </div>
+</section>
+
+<!-- PRECIOS -->
+<section id="precios" style="background:#0d1a10;border-top:1px solid #1e3424;border-bottom:1px solid #1e3424">
+  <div style="text-align:center;max-width:560px;margin:0 auto">
+    <div class="slabel">Precios</div>
+    <h2 class="stitle">Simple. Sin sorpresas.</h2>
+    <p class="ssub" style="margin:0 auto">Empieza gratis hoy. Cuando tu negocio crezca, el Plan Pro crece contigo.</p>
+  </div>
+  <div class="pgrid">
+    <div class="pcard">
+      <div class="pcname">Plan Gratis</div>
+      <div class="pcprice">$0</div>
+      <div class="pcper">Para siempre</div>
+      <div class="pcfeats">
+        <div class="pcf"><span class="ck">✓</span> Hasta 20 clientes</div>
+        <div class="pcf"><span class="ck">✓</span> 50 ventas por mes</div>
+        <div class="pcf"><span class="ck">✓</span> POS, Agenda y Catálogo</div>
+        <div class="pcf"><span class="ck">✓</span> 1 usuario administrador</div>
+        <div class="pcf dim"><span class="cx">✗</span> Reportes avanzados</div>
+        <div class="pcf dim"><span class="cx">✗</span> Exportación de datos</div>
+        <div class="pcf dim"><span class="cx">✗</span> Múltiples empleados</div>
+      </div>
+      <a href="app.html" class="btnplan btnplan-ghost">Empezar gratis</a>
+    </div>
+    <div class="pcard feat">
+      <div class="pcname" style="color:#fbbf24">Plan Pro 👑</div>
+      <div class="pcprice" style="color:#fbbf24">$29.900</div>
+      <div class="pcper">COP / mes · Sin contratos</div>
+      <div class="pcfeats">
+        <div class="pcf"><span class="ck">✓</span> Clientes ilimitados</div>
+        <div class="pcf"><span class="ck">✓</span> Ventas ilimitadas</div>
+        <div class="pcf"><span class="ck">✓</span> Todos los módulos</div>
+        <div class="pcf"><span class="ck">✓</span> Múltiples empleados y roles</div>
+        <div class="pcf"><span class="ck">✓</span> Reportes completos</div>
+        <div class="pcf"><span class="ck">✓</span> Exportación CSV y JSON</div>
+        <div class="pcf"><span class="ck">✓</span> Cancela cuando quieras</div>
+      </div>
+      <a href="app.html?goto=suscripcion" class="btnplan btnplan-gold">💳 Activar Plan Pro</a>
+    </div>
+  </div>
+  <p style="text-align:center;font-size:13px;color:#4a6a50;margin-top:18px">🔒 Pago procesado por <strong style="color:#9db8a2">Wompi (Bancolombia)</strong> · PSE · Tarjetas · Nequi · DaviPlata</p>
+</section>
+
+<!-- TESTIMONIOS -->
+<section>
+  <div style="text-align:center;max-width:560px;margin:0 auto">
+    <div class="slabel">Testimonios</div>
+    <h2 class="stitle">Lo que dicen los negocios</h2>
+  </div>
+  <div class="tgrid">
+    <div class="tcard">
+      <div class="tstars">★★★★★</div>
+      <p class="tbody">"Antes llevaba todo en una libreta y siempre perdía información. Ahora sé exactamente cuánto generé esta semana y quiénes me deben."</p>
+      <div class="tauthor"><div class="tav" style="background:#4ade80">L</div><div><div class="tname">Lorena M.</div><div class="tbiz">Salón de belleza · Medellín</div></div></div>
+    </div>
+    <div class="tcard">
+      <div class="tstars">★★★★★</div>
+      <p class="tbody">"El módulo de agenda me salvó. Los recordatorios por WhatsApp redujeron a cero las inasistencias de mis clientes."</p>
+      <div class="tauthor"><div class="tav" style="background:#60a5fa">C</div><div><div class="tname">Carlos R.</div><div class="tbiz">Centro de estética · Cali</div></div></div>
+    </div>
+    <div class="tcard">
+      <div class="tstars">★★★★★</div>
+      <p class="tbody">"Para mi tienda es perfecto. Controlo el inventario, registro las ventas y veo qué productos se mueven más — desde el celular."</p>
+      <div class="tauthor"><div class="tav" style="background:#fbbf24">A</div><div><div class="tname">Andrea P.</div><div class="tbiz">Boutique · Bogotá</div></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section style="background:#0d1a10;border-top:1px solid #1e3424;border-bottom:1px solid #1e3424">
+  <div style="max-width:680px;margin:0 auto">
+    <div class="slabel" style="text-align:center">Preguntas frecuentes</div>
+    <h2 class="stitle" style="text-align:center;margin-bottom:36px">¿Tienes dudas?</h2>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)"><span>¿Necesito instalar algo?</span><span class="farrow">+</span></button><div class="faq-a">No. ClienteFlow Pro funciona directo en el navegador — Chrome, Safari, Firefox. Desde el celular o el computador, sin instalaciones.</div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)"><span>¿Mis datos están seguros?</span><span class="farrow">+</span></button><div class="faq-a">Sí. Usamos Firebase de Google con cifrado en tránsito (HTTPS) y en reposo. Tus datos no se comparten con nadie.</div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)"><span>¿Qué pasa si supero los límites del plan gratis?</span><span class="farrow">+</span></button><div class="faq-a">La app te avisa antes de llegar al límite y te da la opción de actualizar al Plan Pro. No pierdes ningún dato.</div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)"><span>¿Puedo cancelar el Plan Pro cuando quiera?</span><span class="farrow">+</span></button><div class="faq-a">Sí. No hay contratos ni penalizaciones. Tu plan seguirá activo hasta la fecha de vencimiento y luego pasas al plan gratis automáticamente.</div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)"><span>¿Cómo funciona el pago?</span><span class="farrow">+</span></button><div class="faq-a">El pago se procesa de forma segura a través de Wompi (Bancolombia). Aceptamos tarjetas débito/crédito, PSE, Nequi y DaviPlata.</div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)"><span>¿Puedo tener varios empleados?</span><span class="farrow">+</span></button><div class="faq-a">Sí, en el Plan Pro puedes crear usuarios para cada empleado con roles: Administrador, Gerente o Empleado, cada uno con permisos distintos.</div></div>
+  </div>
+</section>
+
+<!-- CTA FINAL -->
+<div class="ctafinal">
+  <div class="slabel" style="display:inline-block">Empieza hoy</div>
+  <h2>Tu negocio merece<br>herramientas profesionales</h2>
+  <p>Gratis para siempre en el plan básico. Sin tarjeta de crédito para empezar.</p>
+  <a href="app.html" class="btn-p" style="display:inline-flex;margin:0 auto;font-size:16px;padding:15px 38px">🚀 Crear cuenta gratis</a>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-inner">
+    <div class="fbrand">
+      <div style="font-family:Syne,sans-serif;font-size:17px;font-weight:700">🌿 ClienteFlow Pro</div>
+      <p>CRM + Punto de Venta para negocios en Colombia. Gestiona, cobra y crece.</p>
+    </div>
+    <div class="flinks">
+      <h4>Producto</h4>
+      <a href="#funciones">Funciones</a>
+      <a href="#precios">Precios</a>
+      <a href="#como-funciona">Cómo funciona</a>
+      <a href="app.html">Entrar a la app</a>
+    </div>
+    <div class="flinks">
+      <h4>Legal</h4>
+      <a href="politicas.html">Términos y condiciones</a>
+      <a href="politicas.html">Política de privacidad</a>
+    </div>
+    <div class="flinks">
+      <h4>Contacto</h4>
+      <a href="mailto:julianrene113@gmail.com">julianrene113@gmail.com</a>
+    </div>
+  </div>
+  <div class="fbot">
+    <span>© 2024 ClienteFlow Pro · Todos los derechos reservados</span>
+    <span>Hecho con 🌿 en Colombia</span>
+  </div>
+</footer>
+
+<script>
+function toggleFaq(btn){
+  const a=btn.nextElementSibling,arrow=btn.querySelector('.farrow'),open=a.classList.contains('open');
+  document.querySelectorAll('.faq-a.open').forEach(el=>{el.classList.remove('open');el.previousElementSibling.querySelector('.farrow').textContent='+';el.previousElementSibling.querySelector('.farrow').style.transform='rotate(0)'});
+  if(!open){a.classList.add('open');arrow.textContent='−';arrow.style.transform='rotate(45deg)'}
+}
+// Scroll reveal
+const obs=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting){e.target.style.opacity='1';e.target.style.transform='translateY(0)'}}),{threshold:0.1});
+document.querySelectorAll('.fc,.tcard,.pcard,.hstep,.sitem,.ncard').forEach(el=>{el.style.cssText+='opacity:0;transform:translateY(18px);transition:opacity .45s ease,transform .45s ease';obs.observe(el)});
+</script>
+</body>
+</html>
