@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Políticas de Privacidad y Términos — ClienteFlow Pro</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:#080f0a;color:#ecfdf0;font-family:'DM Sans',sans-serif;font-size:15px;line-height:1.7}
+h1,h2,h3,h4{font-family:'Syne',sans-serif}
+a{color:#4ade80;text-decoration:none}
+a:hover{text-decoration:underline}
+:root{--green:#4ade80;--surface:#0d1a10;--card:#122016;--border:#1e3424;--text2:#9db8a2;--text3:#4a6a50}
+
+nav{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:14px 5vw;background:rgba(8,15,10,0.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
+.nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+.nav-logo .icon{width:32px;height:32px;background:linear-gradient(135deg,#4ade80,#15803d);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px}
+.nav-logo span{font-family:'Syne',sans-serif;font-weight:700;font-size:14px;color:#ecfdf0}
+.nav-back{color:var(--text2);font-size:13.5px;text-decoration:none;display:flex;align-items:center;gap:6px;transition:color .15s}
+.nav-back:hover{color:#4ade80;text-decoration:none}
+
+.hero{padding:64px 5vw 48px;text-align:center;border-bottom:1px solid var(--border);background:linear-gradient(180deg,rgba(74,222,128,0.04) 0%,transparent 100%)}
+.hero p{color:var(--text2);font-size:13px;margin-top:8px}
+.update-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.2);border-radius:20px;padding:4px 12px;font-size:11.5px;color:#4ade80;margin-bottom:20px;font-weight:600}
+
+.layout{display:grid;grid-template-columns:240px 1fr;gap:0;max-width:1060px;margin:0 auto;min-height:calc(100vh - 200px)}
+
+/* TOC */
+.toc{padding:32px 20px;border-right:1px solid var(--border);position:sticky;top:65px;height:fit-content;max-height:calc(100vh - 80px);overflow-y:auto}
+.toc h3{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:14px}
+.toc a{display:block;color:var(--text2);font-size:13px;padding:5px 8px;border-radius:6px;margin-bottom:2px;transition:all .15s;border-left:2px solid transparent}
+.toc a:hover{color:#4ade80;background:rgba(74,222,128,.06);text-decoration:none}
+.toc a.active{color:#4ade80;border-left-color:#4ade80;background:rgba(74,222,128,.06)}
+
+/* CONTENT */
+.content{padding:40px 48px 80px}
+.sec{margin-bottom:52px;scroll-margin-top:80px}
+.sec h2{font-size:20px;font-weight:700;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.sec h2 .secnum{font-size:13px;color:var(--text3);font-weight:400}
+.sec h3{font-size:15px;font-weight:700;margin:20px 0 8px;color:#ecfdf0}
+.sec p{color:var(--text2);margin-bottom:12px;font-size:14.5px}
+.sec ul{margin:8px 0 14px 20px;display:flex;flex-direction:column;gap:5px}
+.sec ul li{color:var(--text2);font-size:14px;line-height:1.6}
+.sec ul li strong{color:#ecfdf0}
+
+.info-box{background:rgba(74,222,128,.05);border:1px solid rgba(74,222,128,.2);border-radius:10px;padding:14px 16px;margin:14px 0}
+.info-box p{color:#9db8a2;margin:0;font-size:13.5px}
+.warn-box{background:rgba(251,191,36,.05);border:1px solid rgba(251,191,36,.2);border-radius:10px;padding:14px 16px;margin:14px 0}
+.warn-box p{color:#9db8a2;margin:0;font-size:13.5px}
+
+.ref-links{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.ref-link{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:13px;color:var(--text2);text-decoration:none;transition:border-color .15s}
+.ref-link:hover{border-color:#4ade80;color:#4ade80;text-decoration:none}
+
+.contact-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-top:16px}
+.contact-card p{margin:0;font-size:14px;color:var(--text2)}
+.contact-card strong{color:#ecfdf0}
+
+footer-pol{display:block;background:var(--surface);border-top:1px solid var(--border);padding:24px 5vw;text-align:center;font-size:12.5px;color:var(--text3)}
+
+@media(max-width:768px){
+  .layout{grid-template-columns:1fr}
+  .toc{display:none}
+  .content{padding:24px 5vw 60px}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/Clientes-Flow-Pro/" class="nav-logo">
+    <div class="icon">🌿</div>
+    <span>ClienteFlow Pro</span>
+  </a>
+  <a href="/Clientes-Flow-Pro/" class="nav-back">← Volver al inicio</a>
+</nav>
+
+<div class="hero">
+  <div class="update-badge">📋 Documento legal</div>
+  <h1 style="font-size:clamp(24px,4vw,38px);font-weight:800;letter-spacing:-.02em">Políticas de Privacidad<br>y Condiciones de Uso</h1>
+  <p>Última actualización: 25 de junio de 2024 · ClienteFlow Pro</p>
+</div>
+
+<div class="layout">
+
+  <!-- TOC -->
+  <aside class="toc">
+    <h3>Contenido</h3>
+    <a href="#sec1">1. Aceptación</a>
+    <a href="#sec2">2. Propiedad intelectual</a>
+    <a href="#sec3">3. Servicios de terceros</a>
+    <a href="#sec4">4. Aviso legal</a>
+    <a href="#sec5">5. Deberes y prohibiciones</a>
+    <a href="#sec6">6. Aviso de privacidad</a>
+    <a href="#sec7">7. Seguridad de datos</a>
+    <a href="#sec8">8. Ley aplicable</a>
+  </aside>
+
+  <!-- CONTENT -->
+  <main class="content">
+
+    <div class="info-box">
+      <p>Al acceder y usar ClienteFlow Pro reconoces que has leído, entendido y aceptas estos términos. Si no estás de acuerdo, te sugerimos abstenerte de usar la plataforma.</p>
+    </div>
+
+    <div class="sec" id="sec1">
+      <h2>Aceptación de los términos <span class="secnum">— Art. 1</span></h2>
+      <p>El acceso y uso de ClienteFlow Pro implica la aceptación plena, expresa e irrevocable de estos Términos y Condiciones por parte del Ciudadano-Usuario. Aplican adicionalmente la legislación de la República de Colombia y la normativa internacional aplicable.</p>
+
+      <h3>1.1 Uso por menores de edad</h3>
+      <p>El acceso está dirigido a personas mayores de 18 años. Los menores solo podrán acceder bajo supervisión directa de un adulto responsable que haya aceptado estos términos en su nombre.</p>
+    </div>
+
+    <div class="sec" id="sec2">
+      <h2>Derechos de propiedad intelectual <span class="secnum">— Art. 2</span></h2>
+      <p>El software, diseño visual, código fuente, estructura de base de datos, logotipos y demás contenidos de ClienteFlow Pro son propiedad intelectual de sus desarrolladores y están protegidos por las leyes de propiedad intelectual de Colombia y los tratados internacionales aplicables.</p>
+      <p>Se otorga al administrador de cada cuenta una licencia de uso personal, no exclusiva e intransferible, limitada a la operación de su propio negocio.</p>
+      <div class="warn-box">
+        <p>⚠️ Queda <strong style="color:#fbbf24">expresamente prohibido</strong> reproducir, distribuir, modificar, descompilar, sublicenciar o comercializar el software sin autorización escrita previa.</p>
+      </div>
+      <p>Los datos ingresados por cada administrador (clientes, ventas, inventario, empleados) son de su exclusiva propiedad y pueden ser exportados o eliminados en cualquier momento desde el módulo de Exportar y desde Configuración.</p>
+    </div>
+
+    <div class="sec" id="sec3">
+      <h2>Servicios de terceros <span class="secnum">— Art. 3</span></h2>
+      <p>ClienteFlow Pro se integra con los siguientes servicios de terceros para su funcionamiento:</p>
+      <ul>
+        <li><strong>Google Firebase</strong> (Authentication y Firestore) — almacenamiento de datos y autenticación de usuarios</li>
+        <li><strong>WhatsApp</strong> — envío de mensajes mediante enlaces directos (wa.me), sin integración de API oficial de pago</li>
+        <li><strong>GitHub Pages</strong> — alojamiento (hosting) de la aplicación</li>
+        <li><strong>Wompi (Bancolombia)</strong> — procesamiento de pagos del Plan Pro</li>
+      </ul>
+      <p>Estos servicios se rigen por sus propias políticas de privacidad y términos de uso. ClienteFlow Pro no se responsabiliza por el contenido, disponibilidad, cambios de tarifas o prácticas de privacidad de dichos servicios.</p>
+    </div>
+
+    <div class="sec" id="sec4">
+      <h2>Aviso legal <span class="secnum">— Art. 4</span></h2>
+      <p>La información gestionada a través de ClienteFlow Pro es responsabilidad exclusiva del administrador de cada cuenta, quien actúa como responsable del tratamiento frente a sus propios clientes y empleados.</p>
+      <p>ClienteFlow Pro actúa únicamente como herramienta tecnológica y <strong>no se hace responsable</strong> por:</p>
+      <ul>
+        <li>El uso indebido que el administrador haga de los datos de sus clientes o empleados</li>
+        <li>Decisiones comerciales, financieras o de cualquier otra índole tomadas con base en la información mostrada</li>
+        <li>Pérdidas derivadas de interrupciones del servicio de terceros (Firebase, WhatsApp, GitHub Pages)</li>
+        <li>El contenido de los mensajes enviados a través de la función de WhatsApp</li>
+      </ul>
+    </div>
+
+    <div class="sec" id="sec5">
+      <h2>Deberes y prohibiciones <span class="secnum">— Art. 5</span></h2>
+      <p>Todo Ciudadano-Usuario de ClienteFlow Pro se compromete a:</p>
+      <ul>
+        <li>Usar la plataforma de forma lícita, ética y conforme a la ley colombiana vigente</li>
+        <li>No intentar acceder sin autorización a datos de otros negocios o cuentas distintas a la propia</li>
+        <li>No introducir virus, malware, ni realizar ataques informáticos o ingeniería inversa</li>
+        <li>Respetar la privacidad y confidencialidad de los datos de clientes y empleados</li>
+        <li>Cumplir con la Ley 1581 de 2012 al recopilar información de sus propios clientes</li>
+        <li>No compartir sus credenciales de acceso con personas no autorizadas</li>
+        <li>Notificar de inmediato cualquier uso no autorizado de su cuenta</li>
+      </ul>
+      <div class="warn-box">
+        <p>⚠️ El incumplimiento puede acarrear la suspensión o cancelación del acceso, sin perjuicio de las acciones legales que correspondan.</p>
+      </div>
+    </div>
+
+    <div class="sec" id="sec6">
+      <h2>Aviso de privacidad <span class="secnum">— Art. 6</span></h2>
+
+      <h3>Responsable del tratamiento</h3>
+      <div class="contact-card">
+        <p>Titular de la cuenta administrador registrada en la plataforma.</p>
+        <p style="margin-top:6px">Contacto: <a href="mailto:julianrene113@gmail.com">julianrene113@gmail.com</a></p>
+      </div>
+
+      <h3>Datos que se recopilan</h3>
+      <ul>
+        <li><strong>Clientes del negocio:</strong> nombre, teléfono, email, fecha de cumpleaños, notas, historial de compras y citas</li>
+        <li><strong>Empleados:</strong> nombre, tipo y número de documento, celular, WhatsApp, usuario y contraseña</li>
+        <li><strong>Transacciones:</strong> ventas, devoluciones, pagos, movimientos de inventario</li>
+        <li><strong>Administrador:</strong> correo electrónico y contraseña, gestionados por Firebase Authentication</li>
+      </ul>
+
+      <h3>Finalidad</h3>
+      <p>Estos datos se usan exclusivamente para la operación de la plataforma. No se utilizan con fines publicitarios, no se venden ni se comparten con terceros distintos de los proveedores tecnológicos mencionados en el Art. 3.</p>
+
+      <h3>Derechos del titular (ARCO)</h3>
+      <p>Conforme a la Ley 1581 de 2012, toda persona cuyos datos sean tratados tiene derecho a <strong>conocer, actualizar, rectificar y solicitar la eliminación</strong> de sus datos, así como a oponerse a su tratamiento.</p>
+      <div class="info-box">
+        <p>📧 Para ejercer estos derechos escribe a <a href="mailto:julianrene113@gmail.com">julianrene113@gmail.com</a>. Toda solicitud será atendida en un plazo máximo de <strong>15 días hábiles</strong>.</p>
+      </div>
+
+      <h3>Vigencia y eliminación</h3>
+      <p>Los datos se conservan mientras la cuenta esté activa. El administrador puede eliminar todos los datos desde <strong>Configuración → Zona de peligro → Borrar datos del negocio</strong>.</p>
+    </div>
+
+    <div class="sec" id="sec7">
+      <h2>Seguridad de datos <span class="secnum">— Art. 7</span></h2>
+      <p>Implementamos las siguientes medidas técnicas para proteger los datos, alineadas con la <a href="https://www.mintic.gov.co/portal/715/articles-2627_Resolucion_2239_de_2024.pdf" target="_blank">Resolución MinTIC 2239 de 2024</a>:</p>
+      <ul>
+        <li>Autenticación segura mediante Firebase Authentication</li>
+        <li>Cifrado de comunicaciones en tránsito mediante HTTPS/TLS</li>
+        <li>Cifrado en reposo en los servidores de Google Cloud / Firebase</li>
+        <li>Reglas de seguridad de Firestore que restringen el acceso por negocio</li>
+        <li>Control de acceso diferenciado: Administrador, Gerente y Empleado</li>
+        <li>Registro de auditoría de movimientos de inventario y devoluciones</li>
+      </ul>
+
+      <h3>7.1 Política de seguridad de la información</h3>
+      <ul>
+        <li>Las contraseñas de administradores se gestionan por Firebase Authentication sin acceso en texto plano</li>
+        <li>Los empleados no pueden ver, modificar ni eliminar configuración del negocio</li>
+        <li>Las acciones irreversibles requieren confirmación explícita del administrador</li>
+        <li>Ante sospecha de acceso no autorizado, cambia inmediatamente tu contraseña y las de tus empleados</li>
+      </ul>
+    </div>
+
+    <div class="sec" id="sec8">
+      <h2>Ley y jurisdicción aplicable <span class="secnum">— Art. 8</span></h2>
+      <p>Estos Términos se rigen por las leyes de la <strong>República de Colombia</strong>. Para cualquier controversia, las partes se someten a los tribunales competentes de Colombia.</p>
+
+      <h3>Marco normativo de referencia</h3>
+      <div class="ref-links">
+        <a href="https://www.alcaldiabogota.gov.co/sisjur/normas/Norma1.jsp?i=49981" target="_blank" class="ref-link">
+          📄 Ley 1581 de 2012 — Régimen General de Protección de Datos Personales (Habeas Data) ↗
+        </a>
+        <a href="https://www.mintic.gov.co/portal/715/articles-2627_Resolucion_2239_de_2024.pdf" target="_blank" class="ref-link">
+          📄 Resolución MinTIC 2239 de 2024 — Política General de Seguridad y Privacidad ↗
+        </a>
+        <a href="https://www.mintic.gov.co/portal/715/articles-2627_Resolucion_2238_de_2024.pdf" target="_blank" class="ref-link">
+          📄 Resolución MinTIC 2238 de 2024 — Política de Tratamiento de Datos Personales ↗
+        </a>
+      </div>
+
+      <div class="contact-card" style="margin-top:24px">
+        <p>¿Preguntas sobre estas políticas?</p>
+        <p style="margin-top:4px"><a href="mailto:julianrene113@gmail.com">julianrene113@gmail.com</a></p>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<footer-pol>
+  © 2024 ClienteFlow Pro · Todos los derechos reservados ·
+  <a href="/Clientes-Flow-Pro/">Volver al inicio</a>
+</footer-pol>
+
+<script>
+// Highlight TOC on scroll
+const sections = document.querySelectorAll('.sec');
+const tocLinks = document.querySelectorAll('.toc a');
+const obs = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if(e.isIntersecting){
+      tocLinks.forEach(a => a.classList.remove('active'));
+      const link = document.querySelector('.toc a[href="#'+e.target.id+'"]');
+      if(link) link.classList.add('active');
+    }
+  });
+}, {threshold: 0.3, rootMargin: '-60px 0px -60% 0px'});
+sections.forEach(s => obs.observe(s));
+</script>
+</body>
+</html>
