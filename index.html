@@ -4474,6 +4474,9 @@ enterApp = async function() {
   _enterApp_original();
   await loadPlan();
   injectPlanNavItem();
+  // Al final de enterApp(), después de injectPlanNavItem():
+const gotoParam = new URLSearchParams(window.location.search).get('goto');
+if(gotoParam){ window.history.replaceState({},''​,window.location.pathname); go(gotoParam); }
   await verificarPagoWompi();
 };
 
